@@ -10,15 +10,15 @@ file(COPY ${ASSETS} DESTINATION ${CMAKE_BINARY_DIR})
 # 3 Third party
 # 3.1 Include third party .h
 include_directories(
-SYSTEM ${CMAKE_CURRENT_SOURCE_DIR}/../thirdParty/glm/include
-SYSTEM ${CMAKE_CURRENT_SOURCE_DIR}/../thirdParty/glfw/include
-SYSTEM ${CMAKE_CURRENT_SOURCE_DIR}/../thirdParty/vulkan/Include
+SYSTEM ${CMAKE_CURRENT_SOURCE_DIR}/thirdParty/glm/include
+SYSTEM ${CMAKE_CURRENT_SOURCE_DIR}/thirdParty/glfw/include
+SYSTEM ${CMAKE_CURRENT_SOURCE_DIR}/thirdParty/vulkan/Include
 )
 
-# 3.2 Link third parth .lib
+# 3.2 Link third party .lib
 link_directories(
-SYSTEM ${CMAKE_CURRENT_SOURCE_DIR}/../thirdParty/glfw/lib
-SYSTEM ${CMAKE_CURRENT_SOURCE_DIR}/../thirdParty/vulkan/Lib
+SYSTEM ${CMAKE_CURRENT_SOURCE_DIR}/thirdParty/glfw/lib
+SYSTEM ${CMAKE_CURRENT_SOURCE_DIR}/thirdParty/vulkan/Lib
 )
 
 # 4 Add subdirectory .cpp

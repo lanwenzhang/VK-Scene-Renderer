@@ -179,6 +179,8 @@ namespace FF::Wrapper {
 
 		// 5 Create queue
 		vkGetDeviceQueue(mDevice, mGraphicQueueFamily.value(), 0, &mGraphicQueue);
+
+
 		vkGetDeviceQueue(mDevice, mPresentQueueFamily.value(), 0, &mPresentQueue);
 	}
 

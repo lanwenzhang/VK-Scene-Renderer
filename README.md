@@ -1,6 +1,6 @@
-# OBJ-Model-Renderer
+# Mesh-Renderer
 
-A framework for rendering Obj 3D models with textures for understanding the Vulkan API.
+ A real-time Vulkan renderer supporting multiple 3D model formats (OBJ, FBX, GLTF) with texture mapping  
 
 ## Screenshots
 ![OBJ-Model-Renderer](data/screenshot.gif)

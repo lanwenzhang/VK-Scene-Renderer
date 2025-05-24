@@ -1,6 +1,6 @@
 # Mesh-Renderer
 
- A real-time Vulkan renderer supporting multiple 3D model formats (OBJ, FBX, GLTF) with texture mapping  
+ A real-time Vulkan renderer supporting multiple 3D model formats (OBJ, FBX, glTF) with texture mapping  
 
 ## Screenshots
 ![OBJ-Model-Renderer](data/screenshot.gif)

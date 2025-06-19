@@ -48,15 +48,26 @@ void UniformManager::init(const Wrapper::Device::Ptr& device, const Wrapper::Com
 
 	mUniformParams.push_back(objectParam);
 
-	// 2.3 Create texture uniform
+	// 2.3 Create model texture uniform
 	auto textureParam = Wrapper::UniformParameter::create();
 	textureParam->mBinding = 2;
 	textureParam->mCount = 1;
 	textureParam->mDescriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
 	textureParam->mStage = VK_SHADER_STAGE_FRAGMENT_BIT;
-	textureParam->mTexture = Texture::create(mDevice, commandPool, "assets/shuttle.jpg");
+	textureParam->mTexture = Texture::create(mDevice, commandPool, "assets/shuttle/shuttle.jpg");
 
 	mUniformParams.push_back(textureParam);
+
+
+	// 2.4 Create cubemap texture uniform
+	auto param = Wrapper::UniformParameter::create();
+	param->mBinding = 3;
+	param->mCount = 1;
+	param->mDescriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+	param->mStage = VK_SHADER_STAGE_FRAGMENT_BIT;
+	param->mCubeMap = CubeMapTexture::create(mDevice, commandPool, "assets/rogland_clear_night_4k.hdr");
+
+	mUniformParams.push_back(param);
 
 	// 3 Descriptor layout
 	mDescriptorSetLayout = Wrapper::DescriptorSetLayout::create(device);
@@ -74,6 +85,5 @@ void UniformManager::init(const Wrapper::Device::Ptr& device, const Wrapper::Com
 void UniformManager::update(const VPMatrices& vpMatrices, const ObjectUniform& objectUniform, const int& frameCount) {
 	
 	mUniformParams[0]->mBuffers[frameCount]->updateBufferByMap((void*)(&vpMatrices), sizeof(VPMatrices));
-
 	mUniformParams[1]->mBuffers[frameCount]->updateBufferByMap((void*)(&objectUniform), sizeof(ObjectUniform));
 }

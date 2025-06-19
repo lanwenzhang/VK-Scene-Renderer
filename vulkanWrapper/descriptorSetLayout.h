@@ -13,18 +13,16 @@ namespace FF::Wrapper {
 		static Ptr create(const Device::Ptr& device) { return std::make_shared<DescriptorSetLayout>(device); }
 
 		DescriptorSetLayout(const Device::Ptr& device);
-
 		~DescriptorSetLayout();
 
 		void build(const std::vector<UniformParameter::Ptr>& params);
 
-		[[nodiscard]] auto getLayout() const { return mLayout; }
+		[[nodiscard]] const VkDescriptorSetLayout& getLayout() const { return mLayout; }
 
 	private:
 
-		VkDescriptorSetLayout mLayout{ VK_NULL_HANDLE };
 		Device::Ptr mDevice{ nullptr };
-
+		VkDescriptorSetLayout mLayout{ VK_NULL_HANDLE };
 		std::vector<UniformParameter::Ptr> mParams{};
 	};
 }

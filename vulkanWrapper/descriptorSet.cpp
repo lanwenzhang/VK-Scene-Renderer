@@ -42,7 +42,13 @@ namespace FF::Wrapper {
 
 				if (param->mDescriptorType == VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER) {
 					
-					descriptorSetWrite.pImageInfo = &param->mTexture->getImageInfo();
+					if (param->mTexture) {
+						descriptorSetWrite.pImageInfo = &param->mTexture->getImageInfo();
+					}
+					else if (param->mCubeMap) {
+						descriptorSetWrite.pImageInfo = &param->mCubeMap->getImageInfo();
+
+					}
 				}
 
 				descriptorSetWrites.push_back(descriptorSetWrite);

@@ -10,20 +10,23 @@ file(COPY ${ASSETS} DESTINATION ${CMAKE_BINARY_DIR})
 # 3 Third party
 # 3.1 Include third party .h
 include_directories(
-SYSTEM ${CMAKE_CURRENT_SOURCE_DIR}/thirdParty/glm/include
-SYSTEM ${CMAKE_CURRENT_SOURCE_DIR}/thirdParty/glfw/include
-SYSTEM ${CMAKE_CURRENT_SOURCE_DIR}/thirdParty/vulkan/Include
+SYSTEM ${CMAKE_CURRENT_SOURCE_DIR}/../thirdParty/assimp/include
+SYSTEM ${CMAKE_CURRENT_SOURCE_DIR}/../thirdParty/glm/include
+SYSTEM ${CMAKE_CURRENT_SOURCE_DIR}/../thirdParty/glfw/include
+SYSTEM ${CMAKE_CURRENT_SOURCE_DIR}/../thirdParty/vulkan/Include
 )
 
 # 3.2 Link third party .lib
 link_directories(
-SYSTEM ${CMAKE_CURRENT_SOURCE_DIR}/thirdParty/glfw/lib
-SYSTEM ${CMAKE_CURRENT_SOURCE_DIR}/thirdParty/vulkan/Lib
+SYSTEM ${CMAKE_CURRENT_SOURCE_DIR}/../thirdParty/assimp/lib
+SYSTEM ${CMAKE_CURRENT_SOURCE_DIR}/../thirdParty/glfw/lib
+SYSTEM ${CMAKE_CURRENT_SOURCE_DIR}/../thirdParty/vulkan/Lib
 )
 
 # 4 Add subdirectory .cpp
 add_subdirectory(vulkanWrapper)
 add_subdirectory(texture)
+add_subdirectory(tools)
 
 # 5 Main directory
 # 5.1 Collect all .cpp and .c  to variable
@@ -33,4 +36,4 @@ aux_source_directory(. DIRSRCS)
 add_executable(Vulkan ${DIRSRCS})
 
 # 6 Link subdirectory .cpp and third party .lib
-target_link_libraries(Vulkan vulkanLib textureLib vulkan-1.lib glfw3.lib)
+target_link_libraries(Vulkan vulkanLib textureLib toolsLib vulkan-1.lib glfw3.lib assimp-vc143-mtd.lib zlibstaticd.lib)

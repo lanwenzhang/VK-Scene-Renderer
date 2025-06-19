@@ -54,7 +54,6 @@ namespace FF::Wrapper {
 		return buffer;
 	}
 
-
 	Buffer::Buffer(const Device::Ptr& device, VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties){
 	
 		mDevice = device;

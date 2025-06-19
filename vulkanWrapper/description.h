@@ -2,6 +2,7 @@
 
 #include "buffer.h"
 #include "../texture/texture.h"
+#include "../texture/cubeMapTexture.h"
 
 namespace FF::Wrapper {
 
@@ -19,6 +20,7 @@ namespace FF::Wrapper {
 
 		std::vector<Buffer::Ptr> mBuffers{};
 		Texture::Ptr mTexture{ nullptr };
+		CubeMapTexture::Ptr mCubeMap{ nullptr };
 	};
 
 }

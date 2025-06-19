@@ -12,7 +12,8 @@ namespace FF::Wrapper {
 
 		return Image::create(device, width, height, resultFormat, VK_IMAGE_TYPE_2D, VK_IMAGE_TILING_OPTIMAL, 
 			                 VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,sample, 
-							 VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, VK_IMAGE_ASPECT_DEPTH_BIT);
+							 VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, VK_IMAGE_ASPECT_DEPTH_BIT,
+			                 0, 1, VK_IMAGE_VIEW_TYPE_2D);
 
 	}
 
@@ -20,13 +21,15 @@ namespace FF::Wrapper {
 		
 		return Image::create(device, width, height, format, VK_IMAGE_TYPE_2D, VK_IMAGE_TILING_OPTIMAL,
 							 VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT, device->getMaxUsableSampleCount(),
-                             VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, VK_IMAGE_ASPECT_COLOR_BIT);
+                             VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, VK_IMAGE_ASPECT_COLOR_BIT,
+			                 0, 1, VK_IMAGE_VIEW_TYPE_2D);
 
 	}
 
 	Image::Image(const Device::Ptr& device, const int& width, const int& height, const VkFormat& format,
 		const VkImageType& imageType, const VkImageTiling& tiling, const VkImageUsageFlags& usage,
-		const VkSampleCountFlagBits& sample, const VkMemoryPropertyFlags& properties, const VkImageAspectFlags& aspectFlags) {
+		const VkSampleCountFlagBits& sample, const VkMemoryPropertyFlags& properties, const VkImageAspectFlags& aspectFlags,
+		const VkImageCreateFlags& imageCreateFlags, const uint32_t& arrayLayers, const VkImageViewType& viewType) {
 
 		mDevice = device;
 		mLayout = VK_IMAGE_LAYOUT_UNDEFINED;
@@ -46,7 +49,8 @@ namespace FF::Wrapper {
 		imageCreateInfo.usage = usage;
 		imageCreateInfo.samples = sample;
 		imageCreateInfo.mipLevels = 1;
-		imageCreateInfo.arrayLayers = 1;
+		imageCreateInfo.arrayLayers = arrayLayers;
+		imageCreateInfo.flags = imageCreateFlags;
 		imageCreateInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
 		imageCreateInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
 
@@ -77,14 +81,21 @@ namespace FF::Wrapper {
 		// 3 Image view create info
 		VkImageViewCreateInfo imageViewCreateInfo{};
 		imageViewCreateInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
-		imageViewCreateInfo.viewType = imageType == VK_IMAGE_TYPE_2D ? VK_IMAGE_VIEW_TYPE_2D : VK_IMAGE_VIEW_TYPE_3D;
+		imageViewCreateInfo.viewType = viewType;
 		imageViewCreateInfo.format = format;
 		imageViewCreateInfo.image = mImage;
 		imageViewCreateInfo.subresourceRange.aspectMask = aspectFlags;
 		imageViewCreateInfo.subresourceRange.baseMipLevel = 0;
 		imageViewCreateInfo.subresourceRange.levelCount = 1;
 		imageViewCreateInfo.subresourceRange.baseArrayLayer = 0;
-		imageViewCreateInfo.subresourceRange.layerCount = 1;
+		imageViewCreateInfo.subresourceRange.layerCount = arrayLayers;
+
+		imageViewCreateInfo.components = {
+		VK_COMPONENT_SWIZZLE_IDENTITY,
+		VK_COMPONENT_SWIZZLE_IDENTITY,
+		VK_COMPONENT_SWIZZLE_IDENTITY,
+		VK_COMPONENT_SWIZZLE_IDENTITY
+		};
 
 		if (vkCreateImageView(mDevice->getDevice(), &imageViewCreateInfo, nullptr, &mImageView) != VK_SUCCESS) {
 			throw std::runtime_error("Error: failed to create image view");
@@ -183,6 +194,9 @@ namespace FF::Wrapper {
 		case VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL:
 			imageMemoryBarrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
 			break;
+		//case VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL:
+		//	imageMemoryBarrier.srcAccessMask = VK_ACCESS_SHADER_READ_BIT;
+		//	break;
 		default:
 			break;
 		}
@@ -221,7 +235,12 @@ namespace FF::Wrapper {
 		}
 
 		// 3 Set new layout as current layout
-		mLayout = newLayout;
+		if (subresrouceRange.baseArrayLayer == 0 && subresrouceRange.layerCount == 6) {
+			mLayout = newLayout; // Full cubemap transition
+		}
+		else if (subresrouceRange.baseArrayLayer == 0 && subresrouceRange.layerCount == 1) {
+			mLayout = newLayout; // Ordinary 2D texture
+		}
 
 		// 4 Command
 		auto commandBuffer = CommandBuffer::create(mDevice, commandPool);
@@ -232,7 +251,7 @@ namespace FF::Wrapper {
 		commandBuffer->submitSync(mDevice->getGraphicQueue());
 	}
 
-	void Image::fillImageData(size_t size, void* pData, const CommandPool::Ptr& commandPool) {
+	void Image::fillImageData(size_t size, void* pData, const CommandPool::Ptr& commandPool, uint32_t arrayLayer) {
 
 		assert(pData);
 		assert(size);
@@ -241,9 +260,11 @@ namespace FF::Wrapper {
 
 		auto commandBuffer = CommandBuffer::create(mDevice, commandPool);
 		commandBuffer->begin(VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT);
-		commandBuffer->copyBufferToImage(stageBuffer->getBuffer(), mImage, mLayout, mWidth, mHeight);
+
+		commandBuffer->copyBufferToImage(stageBuffer->getBuffer(), mImage, mLayout, mWidth, mHeight, arrayLayer);
 		commandBuffer->end();
 
 		commandBuffer->submitSync(mDevice->getGraphicQueue());
 	}
+
 }

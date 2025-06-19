@@ -99,17 +99,16 @@ namespace FF::Wrapper {
 		vkCmdCopyBuffer(mCommandBuffer, srcBuffer, dstBuffer, copyInfoCount, copyInfos.data());
 	}
 
-	void CommandBuffer::copyBufferToImage(VkBuffer srcBuffer, VkImage dstImage, VkImageLayout dstImageLayout, uint32_t width, uint32_t height) {
+	void CommandBuffer::copyBufferToImage(VkBuffer srcBuffer, VkImage dstImage, VkImageLayout dstImageLayout, uint32_t width, uint32_t height, uint32_t arrayLayer) {
 
 		VkBufferImageCopy region{};
 		region.bufferOffset = 0;
-
 		region.bufferRowLength = 0;
 		region.bufferImageHeight = 0;
 
 		region.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
 		region.imageSubresource.mipLevel = 0;
-		region.imageSubresource.baseArrayLayer = 0;
+		region.imageSubresource.baseArrayLayer = arrayLayer;
 		region.imageSubresource.layerCount = 1;
 		region.imageOffset = { 0, 0, 0 };
 		region.imageExtent = { width, height, 1 };
@@ -117,7 +116,6 @@ namespace FF::Wrapper {
 		vkCmdCopyBufferToImage(mCommandBuffer, srcBuffer, dstImage, dstImageLayout, 1, &region);
 
 	}
-
 
 	void CommandBuffer::submitSync(VkQueue queue, VkFence fence) {
 		

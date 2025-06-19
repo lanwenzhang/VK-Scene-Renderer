@@ -20,9 +20,7 @@ namespace FF {
 		~Texture();	
 
 		[[nodiscard]] auto getImage() const { return mImage; }
-
 		[[nodiscard]] auto getSampler() const { return mSampler; }
-
 		[[nodiscard]] VkDescriptorImageInfo& getImageInfo() { return mImageInfo; }
 
 	private:

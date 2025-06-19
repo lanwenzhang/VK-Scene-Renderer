@@ -26,7 +26,7 @@ namespace FF {
 		mWindow = Wrapper::Window::create(mWidth, mHeight);
 		mWindow->setApp(shared_from_this());
 
-		mCamera.lookAt(glm::vec3(0.0f, 0.0f, 3.0f), glm::vec3(0.0f, 0.0f, -1.0f), glm::vec3(0.0f, 1.0f, 0.0f));
+		mCamera.lookAt(glm::vec3(0.0f, 0.0f, 3.0f), glm::vec3(0.0f, 0.0f, -10.0f), glm::vec3(0.0f, 1.0f, 0.0f));
 		mCamera.update();
 		mCamera.setPerpective(45.0f, (float)mWidth / (float)mHeight, 0.1f, 100.0f);
 		mCamera.setSpeed(0.001f);
@@ -66,9 +66,12 @@ namespace FF {
 
 		// 3.3 Pipeline
 		mModel = Model::create(mDevice);
-		mModel->loadModel("assets/shuttle.obj", mDevice);
+		mModel->loadModel("assets/shuttle/shuttle.obj", mDevice);
+
 		mPipeline = Wrapper::Pipeline::create(mDevice, mRenderPass);
 		createPipeline();
+		mSkyboxPipeline = Wrapper::Pipeline::create(mDevice, mRenderPass);
+		createSkyboxPipeline();
 
 		// 3.4 Command buffer
 		mCommandBuffers.resize(mSwapChain->getImageCount());
@@ -79,36 +82,103 @@ namespace FF {
 
 	}
 
+	void Application::applyCommonPipelineState(const Wrapper::Pipeline::Ptr& pipeline, bool enableDepthWrite, VkCullModeFlagBits cullMode) {
+		
+		// Viewport & Scissor
+		VkViewport viewport = { 0.0f, (float)mHeight, (float)mWidth, -(float)mHeight, 0.0f, 1.0f };
+		VkRect2D scissor = { {0, 0}, {mWidth, mHeight} };
+		pipeline->setViewports({ viewport });
+		pipeline->setScissors({ scissor });
+
+		// Rasterization
+		pipeline->mRasterState.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
+		pipeline->mRasterState.polygonMode = VK_POLYGON_MODE_FILL;
+		pipeline->mRasterState.lineWidth = 1.0f;
+		pipeline->mRasterState.cullMode = cullMode;
+		pipeline->mRasterState.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
+		pipeline->mRasterState.depthBiasEnable = VK_FALSE;
+		pipeline->mRasterState.depthBiasConstantFactor = 0.0f;
+		pipeline->mRasterState.depthBiasClamp = 0.0f;
+		pipeline->mRasterState.depthBiasSlopeFactor = 0.0f;
+
+		// MSAA
+		pipeline->mSampleState.sampleShadingEnable = VK_FALSE;
+		pipeline->mSampleState.rasterizationSamples = mDevice->getMaxUsableSampleCount();
+		pipeline->mSampleState.minSampleShading = 1.0f;
+		pipeline->mSampleState.pSampleMask = nullptr;
+		pipeline->mSampleState.alphaToCoverageEnable = VK_FALSE;
+		pipeline->mSampleState.alphaToOneEnable = VK_FALSE;
+
+		// Depth stencil
+		pipeline->mDepthStencilState.depthTestEnable = VK_TRUE;
+		pipeline->mDepthStencilState.depthWriteEnable = enableDepthWrite ? VK_TRUE : VK_FALSE;
+		pipeline->mDepthStencilState.depthCompareOp = VK_COMPARE_OP_LESS_OR_EQUAL;
+
+		// Blend
+		VkPipelineColorBlendAttachmentState blendAttachment{};
+		blendAttachment.colorWriteMask = VK_COLOR_COMPONENT_R_BIT |
+			VK_COLOR_COMPONENT_G_BIT |
+			VK_COLOR_COMPONENT_B_BIT |
+			VK_COLOR_COMPONENT_A_BIT;
+		blendAttachment.blendEnable = VK_FALSE;
+		blendAttachment.srcColorBlendFactor = VK_BLEND_FACTOR_ONE;
+		blendAttachment.dstColorBlendFactor = VK_BLEND_FACTOR_ZERO;
+		blendAttachment.colorBlendOp = VK_BLEND_OP_ADD;
+
+		blendAttachment.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
+		blendAttachment.dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO;
+		blendAttachment.alphaBlendOp = VK_BLEND_OP_ADD;
+		pipeline->pushBlendAttachments(blendAttachment);
+
+		pipeline->mBlendState.logicOpEnable = VK_FALSE;
+		pipeline->mBlendState.logicOp = VK_LOGIC_OP_COPY;
+		pipeline->mBlendState.blendConstants[0] = 0.0f;
+		pipeline->mBlendState.blendConstants[1] = 0.0f;
+		pipeline->mBlendState.blendConstants[2] = 0.0f;
+		pipeline->mBlendState.blendConstants[3] = 0.0f;
+
+		// Layout
+		pipeline->mLayoutState.setLayoutCount = 1;
+		auto descriptorSetLayoutPtr = mUniformManager->getDescriptorLayout();
+		pipeline->mLayoutState.pSetLayouts = &descriptorSetLayoutPtr->getLayout();
+		pipeline->mLayoutState.pushConstantRangeCount = 0;
+		pipeline->mLayoutState.pPushConstantRanges = nullptr;
+	}
+
+	void Application::createSkyboxPipeline() {
+
+		// Shaders
+		std::vector<Wrapper::Shader::Ptr> shaderGroup{};
+		shaderGroup.push_back(Wrapper::Shader::create(mDevice, "shaders/cubemapvs.spv", VK_SHADER_STAGE_VERTEX_BIT, "main"));
+		shaderGroup.push_back(Wrapper::Shader::create(mDevice, "shaders/cubemapfs.spv", VK_SHADER_STAGE_FRAGMENT_BIT, "main"));
+		mSkyboxPipeline->setShaderGroup(shaderGroup);
+
+		// No vertex buffer
+		mSkyboxPipeline->mVertexInputState.vertexBindingDescriptionCount = 0;
+		mSkyboxPipeline->mVertexInputState.pVertexBindingDescriptions = nullptr;
+		mSkyboxPipeline->mVertexInputState.vertexAttributeDescriptionCount = 0;
+		mSkyboxPipeline->mVertexInputState.pVertexAttributeDescriptions = nullptr;
+
+		// Input assembly
+		mSkyboxPipeline->mAssemblyState.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
+		mSkyboxPipeline->mAssemblyState.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
+		mSkyboxPipeline->mAssemblyState.primitiveRestartEnable = VK_FALSE;
+
+		// Common states
+		applyCommonPipelineState(mSkyboxPipeline, false, VK_CULL_MODE_FRONT_BIT);
+
+		// Render pass
+		mSkyboxPipeline->build();
+	}
+
 	void Application::createPipeline() {
-
-		// 1 Viewport and scissors description
-		VkViewport viewport = {};
-		viewport.x = 0.0f;
-		viewport.y = (float)mHeight;
-		viewport.width = (float)mWidth;
-		viewport.height = -(float)mHeight;
-		viewport.minDepth = 0.0f;
-		viewport.maxDepth = 1.0f;
-
-		VkRect2D scissor = {};
-		scissor.offset = { 0, 0 };
-		scissor.extent = { mWidth, mHeight };
-
-		mPipeline->setViewports({ viewport });
-		mPipeline->setScissors({ scissor });
 
 		// 2 Create shaders
 		std::vector<Wrapper::Shader::Ptr> shaderGroup{};
-
-		// 2.1 Create vertex shader
 		auto shaderVertex = Wrapper::Shader::create(mDevice, "shaders/vs.spv", VK_SHADER_STAGE_VERTEX_BIT, "main");
 		shaderGroup.push_back(shaderVertex);
-
-		// 2.2 Create fragment shader
 		auto shaderFragment = Wrapper::Shader::create(mDevice, "shaders/fs.spv", VK_SHADER_STAGE_FRAGMENT_BIT, "main");
 		shaderGroup.push_back(shaderFragment);
-
-		// 2.3 Add shaders to pipeline
 		mPipeline->setShaderGroup(shaderGroup);
 
 		// 3 Vertex stage 
@@ -125,65 +195,7 @@ namespace FF {
 		mPipeline->mAssemblyState.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
 		mPipeline->mAssemblyState.primitiveRestartEnable = VK_FALSE;
 
-		// 5 Rasterization
-		mPipeline->mRasterState.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
-		mPipeline->mRasterState.polygonMode = VK_POLYGON_MODE_FILL;
-		mPipeline->mRasterState.lineWidth = 1.0f;
-		mPipeline->mRasterState.cullMode = VK_CULL_MODE_BACK_BIT;
-		mPipeline->mRasterState.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
-
-		mPipeline->mRasterState.depthBiasEnable = VK_FALSE;
-		mPipeline->mRasterState.depthBiasConstantFactor = 0.0f;
-		mPipeline->mRasterState.depthBiasClamp = 0.0f;
-		mPipeline->mRasterState.depthBiasSlopeFactor = 0.0f;
-
-		// 6 MSSA
-		mPipeline->mSampleState.sampleShadingEnable = VK_FALSE;
-		mPipeline->mSampleState.rasterizationSamples = mDevice->getMaxUsableSampleCount();
-		mPipeline->mSampleState.minSampleShading = 1.0f;
-		mPipeline->mSampleState.pSampleMask = nullptr;
-		mPipeline->mSampleState.alphaToCoverageEnable = VK_FALSE;
-		mPipeline->mSampleState.alphaToOneEnable = VK_FALSE;
-
-		// 7 Depth stencil
-		mPipeline->mDepthStencilState.depthTestEnable = VK_TRUE;
-		mPipeline->mDepthStencilState.depthWriteEnable = VK_TRUE;
-		mPipeline->mDepthStencilState.depthCompareOp = VK_COMPARE_OP_LESS_OR_EQUAL;
-
-		// 8 Blend
-		// 8.1 Calculation method 1: use alpha
-		VkPipelineColorBlendAttachmentState blendAttachment{};
-		blendAttachment.colorWriteMask = VK_COLOR_COMPONENT_R_BIT |
-			VK_COLOR_COMPONENT_G_BIT |
-			VK_COLOR_COMPONENT_B_BIT |
-			VK_COLOR_COMPONENT_A_BIT;
-		blendAttachment.blendEnable = VK_FALSE;
-		blendAttachment.srcColorBlendFactor = VK_BLEND_FACTOR_ONE;
-		blendAttachment.dstColorBlendFactor = VK_BLEND_FACTOR_ZERO;
-		blendAttachment.colorBlendOp = VK_BLEND_OP_ADD;
-
-		blendAttachment.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
-		blendAttachment.dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO;
-		blendAttachment.alphaBlendOp = VK_BLEND_OP_ADD;
-
-		mPipeline->pushBlendAttachments(blendAttachment);
-
-		// 8.2 Calculation method 2: logical operation
-		mPipeline->mBlendState.logicOpEnable = VK_FALSE;
-		mPipeline->mBlendState.logicOp = VK_LOGIC_OP_COPY;
-
-		// 8.3 Blend constant 
-		mPipeline->mBlendState.blendConstants[0] = 0.0f;
-		mPipeline->mBlendState.blendConstants[1] = 0.0f;
-		mPipeline->mBlendState.blendConstants[2] = 0.0f;
-		mPipeline->mBlendState.blendConstants[3] = 0.0f;
-
-		// 9 Uniform
-		mPipeline->mLayoutState.setLayoutCount = 1;
-		auto layout = mUniformManager->getDescriptorLayout()->getLayout();
-		mPipeline->mLayoutState.pSetLayouts = &layout;
-		mPipeline->mLayoutState.pushConstantRangeCount = 0;
-		mPipeline->mLayoutState.pPushConstantRanges = nullptr;
+		applyCommonPipelineState(mPipeline, true, VK_CULL_MODE_BACK_BIT);
 
 		mPipeline->build();
 	}
@@ -274,7 +286,6 @@ namespace FF {
 		for (int i = 0; i < mSwapChain->getImageCount(); ++i) {
 
 			mCommandBuffers[i] = Wrapper::CommandBuffer::create(mDevice, mCommandPool);
-
 			mCommandBuffers[i]->begin();
 
 			VkRenderPassBeginInfo renderBeginInfo{};
@@ -303,18 +314,17 @@ namespace FF {
 
 			mCommandBuffers[i]->beginRenderPass(renderBeginInfo);
 
+			mCommandBuffers[i]->bindGraphicPipeline(mSkyboxPipeline->getPipeline());
+			mCommandBuffers[i]->bindDescriptorSet(mSkyboxPipeline->getLayout(), mUniformManager->getDescriptorSet(mCurrentFrame));
+			mCommandBuffers[i]->draw(36);
+
 			mCommandBuffers[i]->bindGraphicPipeline(mPipeline->getPipeline());
-
 			mCommandBuffers[i]->bindDescriptorSet(mPipeline->getLayout(), mUniformManager->getDescriptorSet(mCurrentFrame));
-
 			mCommandBuffers[i]->bindVertexBuffer(mModel->getVertexBuffers());
-
 			mCommandBuffers[i]->bindIndexBuffer(mModel->getIndexBuffer()->getBuffer());
-
 			mCommandBuffers[i]->drawIndex(mModel->getIndexCount());
 
 			mCommandBuffers[i]->endRenderPass();
-
 			mCommandBuffers[i]->end();
 		}
 	}
@@ -364,7 +374,9 @@ namespace FF {
 		// 3 Start render
 		// 3.1 Pipeline
 		mPipeline = Wrapper::Pipeline::create(mDevice, mRenderPass);
+		mSkyboxPipeline = Wrapper::Pipeline::create(mDevice, mRenderPass);
 		createPipeline();
+		createSkyboxPipeline();
 
 		// 3.2 Command buffer
 		mCommandBuffers.resize(mSwapChain->getImageCount());
@@ -484,6 +496,7 @@ namespace FF {
 
 	void Application::cleanUp() {
 
+		mSkyboxPipeline.reset();
 		mPipeline.reset();
 		mRenderPass.reset();
 		mSwapChain.reset();

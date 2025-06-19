@@ -48,10 +48,10 @@ namespace FF::Wrapper {
 
 	private:
 
-		VkPipeline mPipeline{ VK_NULL_HANDLE };
-		VkPipelineLayout mLayout{ VK_NULL_HANDLE };
 		Device::Ptr mDevice{ nullptr };
 		RenderPass::Ptr mRenderPass{ nullptr };
+		VkPipeline mPipeline{ VK_NULL_HANDLE };
+		VkPipelineLayout mLayout{ VK_NULL_HANDLE };
 
 		std::vector<Shader::Ptr> mShaders{};
 		std::vector<VkViewport> mViewports{};

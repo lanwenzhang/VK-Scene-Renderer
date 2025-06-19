@@ -94,6 +94,7 @@ namespace FF::Wrapper {
 		pipelineCreateInfo.basePipelineHandle = VK_NULL_HANDLE;
 		pipelineCreateInfo.basePipelineIndex = -1;
 
+
 		if (mPipeline != VK_NULL_HANDLE) {
 			
 			vkDestroyPipeline(mDevice->getDevice(), mPipeline, nullptr);

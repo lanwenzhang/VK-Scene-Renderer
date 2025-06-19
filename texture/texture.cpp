@@ -47,7 +47,7 @@ namespace FF {
 			commandPool
 		);
 
-		mImage->fillImageData(texSize, (void*)pixels, commandPool);
+		mImage->fillImageData(texSize, (void*)pixels, commandPool, 0);
 
 		mImage->setImageLayout(
 			VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,

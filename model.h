@@ -73,9 +73,11 @@ namespace FF {
 
 		void update() {
 
-			glm::mat4 rotateMatrix = glm::mat4(1.0f);
-			rotateMatrix = glm::rotate(rotateMatrix, glm::radians(mAngle), glm::vec3(0.0f, 0.0f, 1.0f));
-			mUniform.mModelMatrix = rotateMatrix;
+			glm::mat4 model = glm::mat4(1.0f);
+			model = glm::rotate(model, glm::radians(180.0f), glm::vec3(0.0f, 1.0f, 0.0f));
+			model = glm::translate(model, glm::vec3(0.0f, 4.0f, 0.0f));
+			model = glm::rotate(model, glm::radians(mAngle), glm::vec3(0.0f, 0.0f, 1.0f));
+			mUniform.mModelMatrix = model;
 
 			mAngle += 0.01f;
 		}

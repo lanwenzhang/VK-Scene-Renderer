@@ -1,9 +1,9 @@
-# Mesh-Renderer
+# LZ-Scene-Renderer
 
- A real-time Vulkan renderer supporting multiple 3D model formats (OBJ, FBX, glTF) with texture mapping  
+A real-time Vulkan scene renderer featuring scene graph management, indirect rendering, and multi-texture support for large-scale 3D scenes.
 
 ## Screenshots
-![Mesh-Renderer](data/screenshot.gif)
+![LZ-Scene-Renderer](data/screenshot.gif)
 
 ## Build
 
@@ -18,9 +18,11 @@ cmake -G "Visual Studio 17 2022" -A x64 ..
 
 ## Dependencies
 * [stb](https://github.com/nothings/stb)
-* [tinyobjloader](https://github.com/tinyobjloader/tinyobjloader)
+* [assimp](https://github.com/assimp/assimp)
+* [Vulkan SDK 1.4](https://vulkan.lunarg.com/)
 
 ## Reference
 * [Vulkan Tutorial](https://vulkan-tutorial.com/)
+* [3D Grphics Rendering Cookbook 2nd Edition](https://github.com/PacktPublishing/3D-Graphics-Rendering-Cookbook-Second-Edition/tree/main)
 * [Vulkan C++ examples Sascha Willems](https://github.com/SaschaWillems/Vulkan)
 

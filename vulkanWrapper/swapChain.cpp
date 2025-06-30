@@ -154,26 +154,28 @@ namespace FF::Wrapper {
 
 	SwapChain::~SwapChain() {
 
-		for (auto& imageView : mSwapChainImageViews) {
-
-			vkDestroyImageView(mDevice->getDevice(), imageView, nullptr);
-		}
-
 		for (auto& frameBuffer : mSwapChainFrameBuffers) {
 
 			vkDestroyFramebuffer(mDevice->getDevice(), frameBuffer, nullptr);
 
 		}
+		mSwapChainFrameBuffers.clear();
 
+		for (auto& imageView : mSwapChainImageViews) {
+
+			vkDestroyImageView(mDevice->getDevice(), imageView, nullptr);
+		}
+		mSwapChainImageViews.clear();
+
+
+		mDepthImages.clear();
+		mMultiSampleImages.clear();
+		mSwapChainImages.clear();
 
 		if (mSwapChain != VK_NULL_HANDLE) {
 
 			vkDestroySwapchainKHR(mDevice->getDevice(), mSwapChain, nullptr);
 		}
-
-		mWindow.reset();
-		mSurface.reset();
-		mDevice.reset();
 	}
 
 	SwapChainSupportInfo SwapChain::querySwapChainSupportInfo() {

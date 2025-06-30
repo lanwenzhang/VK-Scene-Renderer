@@ -25,8 +25,8 @@ namespace FF::Wrapper {
 
 	private:
 
-		std::vector<VkDescriptorSet> mDescriptorSets{};
 		Device::Ptr mDevice{ nullptr };
-
+		std::vector<VkDescriptorSet> mDescriptorSets{};
+		std::unordered_map<uint32_t, std::vector<VkDescriptorImageInfo>> mImageInfos;
 	};
 }

@@ -15,7 +15,7 @@ namespace FF::Wrapper {
 		mBlendState.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
 		mDepthStencilState.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
 		mLayoutState.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-
+		mLayoutState.flags = VK_PIPELINE_LAYOUT_CREATE_UPDATE_AFTER_BIND_POOL_BIT;
 	}
 
 	Pipeline::~Pipeline(){
@@ -32,6 +32,15 @@ namespace FF::Wrapper {
 		}
 	
 	}
+
+	void Pipeline::setDynamicStates(const std::vector<VkDynamicState>& dynamicStates) {
+		mDynamicStatesStorage = dynamicStates;
+
+		mDynamicState.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
+		mDynamicState.dynamicStateCount = static_cast<uint32_t>(mDynamicStatesStorage.size());
+		mDynamicState.pDynamicStates = mDynamicStatesStorage.data();
+	}
+
 
 	void Pipeline::setShaderGroup(const std::vector<Shader::Ptr>& shaderGroup) {
 	
@@ -55,10 +64,19 @@ namespace FF::Wrapper {
 
 		}
 		
-		mViewportState.viewportCount = static_cast<uint32_t>(mViewports.size());
-		mViewportState.pViewports = mViewports.data();
-		mViewportState.scissorCount = static_cast<uint32_t>(mScissors.size());
-		mViewportState.pScissors = mScissors.data();
+		if (mDynamicState.dynamicStateCount > 0) {
+			mViewportState.viewportCount = 1;
+			mViewportState.pViewports = nullptr;
+			mViewportState.scissorCount = 1;
+			mViewportState.pScissors = nullptr;
+		}
+		else {
+			mViewportState.viewportCount = static_cast<uint32_t>(mViewports.size());
+			mViewportState.pViewports = mViewports.data();
+			mViewportState.scissorCount = static_cast<uint32_t>(mScissors.size());
+			mViewportState.pScissors = mScissors.data();
+		}
+
 
 		mBlendState.attachmentCount = static_cast<uint32_t>(mBlendAttachmentStates.size());
 		mBlendState.pAttachments = mBlendAttachmentStates.data();
@@ -67,6 +85,8 @@ namespace FF::Wrapper {
 		if (mLayout != VK_NULL_HANDLE) {
 			vkDestroyPipelineLayout(mDevice->getDevice(), mLayout, nullptr);
 		}
+
+
 
 		if (vkCreatePipelineLayout(mDevice->getDevice(), &mLayoutState, nullptr, &mLayout) != VK_SUCCESS) {
 			throw std::runtime_error("Error: failed to create pipeline layout");
@@ -87,6 +107,7 @@ namespace FF::Wrapper {
 		pipelineCreateInfo.pMultisampleState = &mSampleState;
 		pipelineCreateInfo.pDepthStencilState = &mDepthStencilState;
 		pipelineCreateInfo.pColorBlendState = &mBlendState;
+		pipelineCreateInfo.pDynamicState = (mDynamicState.dynamicStateCount > 0) ? &mDynamicState : nullptr;
 		pipelineCreateInfo.layout = mLayout;
 		pipelineCreateInfo.renderPass = mRenderPass->getRenderPass(); 
 		pipelineCreateInfo.subpass = 0;

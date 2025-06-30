@@ -14,13 +14,38 @@ void Camera::update()
 	m_vMatrix = glm::lookAt(m_position, m_position + m_front, m_up);
 }
 
+void Camera::updatePitch(float deltaAngle)
+{
+	glm::vec3 right = glm::normalize(glm::cross(m_front, m_up));
+
+	glm::mat4 rot = glm::rotate(
+		glm::mat4(1.0f),
+		glm::radians(deltaAngle),
+		right
+	);
+
+	glm::vec4 newFront = rot * glm::vec4(m_front, 0.0f);
+	glm::vec4 newUp = rot * glm::vec4(m_up, 0.0f);
+
+	m_front = glm::normalize(glm::vec3(newFront));
+	m_up = glm::normalize(glm::vec3(newUp));
+	update();
+}
+
 glm::mat4 Camera::getViewMatrix()
 {
 	return m_vMatrix;
 }
 
 glm::mat4 Camera::getProjectMatrix() {
-	return m_pMatrx;
+	
+	return m_pMatrix;
+}
+
+glm::mat4 Camera::getViewProjectionMatrix() {
+
+	return m_pMatrix * m_vMatrix;
+
 }
 
 void Camera::move(CAMERA_MOVE _mode)
@@ -46,7 +71,6 @@ void Camera::move(CAMERA_MOVE _mode)
 
 	update();
 }
-
 void Camera::pitch(float _yOffset)
 {
 	m_pitch += _yOffset * m_sensitivity;
@@ -83,13 +107,20 @@ void Camera::setSentitivity(float _s)
 {
 	m_sensitivity = _s;
 }
-
 void Camera::setPerpective(float angle, float ratio, float near, float far) {
-	m_pMatrx = glm::perspective(glm::radians(angle), ratio, near, far);
+	m_pMatrix = glm::perspective(glm::radians(angle), ratio, near, far);
+	m_pMatrix[1][1] *= -1.0f;
 }
+void Camera::setPosition(const glm::vec3& pos)
+{
+	m_position = pos;
+	update();
+}
+
 
 void Camera::onMouseMove(double _xpos, double _ypos)
 {
+
 	if (m_firstMove)
 	{
 		m_xpos = _xpos;
@@ -104,6 +135,8 @@ void Camera::onMouseMove(double _xpos, double _ypos)
 	m_xpos = _xpos;
 	m_ypos = _ypos;
 
-	pitch(_yOffset);
-	yaw(_xOffset);
+	if (m_enableMouseControl) {
+		pitch(_yOffset);
+		yaw(_xOffset);
+	}
 }

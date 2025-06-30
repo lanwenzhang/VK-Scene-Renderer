@@ -11,7 +11,9 @@ namespace FF::Wrapper {
 	const std::vector<const char*> deviceRequiredExtensions = {
 
 		VK_KHR_SWAPCHAIN_EXTENSION_NAME,
-		VK_KHR_MAINTENANCE1_EXTENSION_NAME // For flip y-axis
+		VK_KHR_MAINTENANCE1_EXTENSION_NAME,
+		VK_KHR_BUFFER_DEVICE_ADDRESS_EXTENSION_NAME,
+		VK_EXT_DESCRIPTOR_INDEXING_EXTENSION_NAME
 	};
 
 	class Device {
@@ -36,35 +38,37 @@ namespace FF::Wrapper {
 
 		// 1.3 Logical device
 		void createLogicalDevice();
-
-
 		VkSampleCountFlagBits getMaxUsableSampleCount();
+
+		PFN_vkGetBufferDeviceAddress getBufferDeviceAddressFunction() const;
+
 		// 2 For external call
 		[[nodiscard]] auto getDevice() const { return mDevice;}
 		[[nodiscard]] auto getPhysicalDevice() const { return mPhysicalDevice; }
 		[[nodiscard]] auto getGraphicQueueFamily() const { return mGraphicQueueFamily; }
 		[[nodiscard]] auto getPresentQueueFamily() const { return mPresentQueueFamily; }
+		[[nodiscard]] auto getComputeQueueFamily() const { return mComputeQueueFamily; }
 		[[nodiscard]] auto getGraphicQueue() const { return mGraphicQueue;}
 		[[nodiscard]] auto getPresentQueue() const { return mPresentQueue; }
+		[[nodiscard]] auto getComputeQueue() const { return mComputeQueue; }
 
 	private:
 
 		Instance::Ptr mInstance{ nullptr };
-		VkDevice mDevice{ VK_NULL_HANDLE };
-		VkPhysicalDevice mPhysicalDevice{ VK_NULL_HANDLE };
 		WindowSurface::Ptr mSurface{ nullptr };
+		VkPhysicalDevice mPhysicalDevice{ VK_NULL_HANDLE };
+		VkDevice mDevice{ VK_NULL_HANDLE };
 
-		// Graphics queue class id
 		std::optional<uint32_t> mGraphicQueueFamily;
-		VkQueue mGraphicQueue{ VK_NULL_HANDLE };
-
-		// Present queue class id
 		std::optional<uint32_t> mPresentQueueFamily;
-		VkQueue mPresentQueue{ VK_NULL_HANDLE };
+		std::optional<uint32_t> mComputeQueueFamily;
 
-		// Anti-aliasing
+		VkQueue mGraphicQueue{ VK_NULL_HANDLE };
+		VkQueue mPresentQueue{ VK_NULL_HANDLE };
+		VkQueue mComputeQueue{ VK_NULL_HANDLE };
+
 		VkSampleCountFlagBits mSampleCounts{ VK_SAMPLE_COUNT_1_BIT };
-	
+		PFN_vkGetBufferDeviceAddress fpGetBufferDeviceAddress = nullptr;
 	};
 
 }

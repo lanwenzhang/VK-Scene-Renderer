@@ -47,9 +47,39 @@ namespace FF::Wrapper {
 	
 	}
 
+	void CommandBuffer::setViewport(uint32_t firstViewport, const VkViewport& viewport){
+		
+		vkCmdSetViewport(mCommandBuffer, firstViewport, 1, &viewport);
+	}
+
+	void CommandBuffer::setScissor(uint32_t firstScissor, const VkRect2D& scissor){
+		vkCmdSetScissor(mCommandBuffer, firstScissor, 1, &scissor);
+	}
+
+
 	void CommandBuffer::bindGraphicPipeline(const VkPipeline& pipeline){
 	
 		vkCmdBindPipeline(mCommandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
+	}
+
+	void CommandBuffer::bindComputePipeline(const VkPipeline& pipeline) {
+		
+		vkCmdBindPipeline(mCommandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, pipeline);
+	}
+
+	void CommandBuffer::pushConstants(const VkPipelineLayout layout, VkShaderStageFlags stageFlags, const PushConstants& pc) {
+		
+		vkCmdPushConstants(mCommandBuffer, layout, stageFlags, 0, sizeof(PushConstants), &pc);
+	}
+
+	void CommandBuffer::pushConstant(const VkPipelineLayout layout, VkShaderStageFlags stageFlags, const glm::mat4& mvp) {
+		
+		vkCmdPushConstants(mCommandBuffer, layout, stageFlags, 0, sizeof(glm::mat4), &mvp);
+	}
+
+	void CommandBuffer::dispatch(uint32_t x, uint32_t y, uint32_t z) {
+		
+		vkCmdDispatch(mCommandBuffer, x, y, z);
 	}
 
 	void CommandBuffer::bindVertexBuffer(const std::vector<VkBuffer>& buffers) {
@@ -64,9 +94,9 @@ namespace FF::Wrapper {
 		vkCmdBindIndexBuffer(mCommandBuffer, buffer, 0, VK_INDEX_TYPE_UINT32);
 	}
 
-	void CommandBuffer::bindDescriptorSet(const VkPipelineLayout layout, const VkDescriptorSet& descriptorSet) {
+	void CommandBuffer::bindDescriptorSet(const VkPipelineLayout layout, const VkDescriptorSet& descriptorSet, uint32_t setIndex) {
 
-		vkCmdBindDescriptorSets(mCommandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, layout, 0, 1, &descriptorSet, 0, nullptr);
+		vkCmdBindDescriptorSets(mCommandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, layout, setIndex, 1, &descriptorSet, 0, nullptr);
 	}
 
 	void CommandBuffer::draw(size_t vertexCount){
@@ -74,12 +104,20 @@ namespace FF::Wrapper {
 		vkCmdDraw(mCommandBuffer, vertexCount, 1, 0, 0);
 	}
 
-
 	void CommandBuffer::drawIndex(size_t indexCount) {
 
 		vkCmdDrawIndexed(mCommandBuffer, indexCount, 1, 0, 0, 0);
 	}
 
+	void CommandBuffer::drawIndexInstanced(uint32_t indexCount, uint32_t instancingCount) {
+		
+		vkCmdDrawIndexed(mCommandBuffer, indexCount, instancingCount, 0, 0, 0);
+	}
+
+	void CommandBuffer::drawIndexedIndirect(VkBuffer indirectBuffer, VkDeviceSize offset, uint32_t drawCount, uint32_t stride) {
+		
+		vkCmdDrawIndexedIndirect(mCommandBuffer, indirectBuffer, offset, drawCount, stride);
+	}
 
 	void CommandBuffer::endRenderPass(){
 	

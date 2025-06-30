@@ -21,14 +21,20 @@ namespace FF {
 		mCamera.move(moveDirection);
 	}
 
+	void Application::enableMouseControl(bool enable) {
+		
+		mCamera.setMouseControl(enable);
+	}
+
 	void Application::initWindow() {
 
 		mWindow = Wrapper::Window::create(mWidth, mHeight);
 		mWindow->setApp(shared_from_this());
 
-		mCamera.lookAt(glm::vec3(0.0f, 0.0f, 3.0f), glm::vec3(0.0f, 0.0f, -10.0f), glm::vec3(0.0f, 1.0f, 0.0f));
+		mCamera.setPosition(glm::vec3(0.0f, 10.0f, 3.0f));
+		mCamera.lookAt(glm::vec3(0.0f, 10.0f, 3.0f), glm::vec3(0.0f, 0.0f, -10.0f), glm::vec3(0.0f, 1.0f, 0.0f));
 		mCamera.update();
-		mCamera.setPerpective(45.0f, (float)mWidth / (float)mHeight, 0.1f, 100.0f);
+		mCamera.setPerpective(45.0f, (float)mWidth / (float)mHeight, 0.1f, 2000.0f);
 		mCamera.setSpeed(0.001f);
 
 	}
@@ -36,59 +42,164 @@ namespace FF {
 	void Application::initVulkan() {
 
 		// 1 Set up environment
-		// 1.1 Instance
 		mInstance = Wrapper::Instance::create(true);
-
-		// 1.2 Surface
 		mSurface = Wrapper::WindowSurface::create(mInstance, mWindow);
-
-		// 1.3 Device
 		mDevice = Wrapper::Device::create(mInstance, mSurface);
-
-		// 3.1 Command pool
 		mCommandPool = Wrapper::CommandPool::create(mDevice);
 
-		// 2 Prepare render target
-		// 2.1 Swap chain
 		mSwapChain = Wrapper::SwapChain::create(mDevice, mWindow, mSurface, mCommandPool);
 		mWidth = mSwapChain->getExtent().width;
 		mHeight = mSwapChain->getExtent().height;
 
-		// 2.2 Render pass
+		// 2 Set up pipeline
 		mRenderPass = Wrapper::RenderPass::create(mDevice);
 		createRenderPass();
 		mSwapChain->createFrameBuffers(mRenderPass);
 		
-		// 3 Start render
-		// 3.2 Uniform
-		mUniformManager = UniformManager::create();
-		mUniformManager->init(mDevice, mCommandPool, mSwapChain->getImageCount());
+		loadMeshFile("assets/crytek_sponza/sponza.obj", mMeshData, mScene);
+		mSceneMesh = SceneMeshRenderer::create(mDevice, mCommandPool, mMeshData, mScene);
 
-		// 3.3 Pipeline
-		mModel = Model::create(mDevice);
-		mModel->loadModel("assets/shuttle/shuttle.obj", mDevice);
+		createDescriptorSets();
 
-		mPipeline = Wrapper::Pipeline::create(mDevice, mRenderPass);
-		createPipeline();
 		mSkyboxPipeline = Wrapper::Pipeline::create(mDevice, mRenderPass);
 		createSkyboxPipeline();
 
-		// 3.4 Command buffer
-		mCommandBuffers.resize(mSwapChain->getImageCount());
-		createCommandBuffers();
+		mSceneGraphPipeline = Wrapper::Pipeline::create(mDevice, mRenderPass);
+		createSceneGraphPipeline();
 
-		// 3.5 Sync
+		createCommandBuffers();
 		createSyncObjects();
 
 	}
 
-	void Application::applyCommonPipelineState(const Wrapper::Pipeline::Ptr& pipeline, bool enableDepthWrite, VkCullModeFlagBits cullMode) {
+	void Application::createDescriptorSets()
+	{
+		// ----------- Frame Uniform -----------
+		mFrameUniformManager = FF::FrameUniformManager::create();
+		mFrameUniformManager->init(mDevice, MAX_FRAMES_IN_FLIGHT);
+
+		std::vector<Wrapper::UniformParameter::Ptr> frameParams =
+			mFrameUniformManager->getParams();
+
+		mDescriptorSetLayout_Frame = Wrapper::DescriptorSetLayout::create(mDevice);
+		mDescriptorSetLayout_Frame->build(frameParams);
+
+		mDescriptorPool_Frame = Wrapper::DescriptorPool::create(mDevice);
+		mDescriptorPool_Frame->build(frameParams, MAX_FRAMES_IN_FLIGHT);
+
+		mDescriptorSet_Frame = Wrapper::DescriptorSet::create(mDevice, frameParams, mDescriptorSetLayout_Frame, mDescriptorPool_Frame, MAX_FRAMES_IN_FLIGHT);
+
+		// ----------- Static Uniforms -----------
+		mTransformUniformManager = FF::TransformUniformManager::create();
+		mTransformUniformManager->init(mDevice, mScene.globalTransform.size(), mScene.globalTransform.empty() ? nullptr : mScene.globalTransform.data(), MAX_FRAMES_IN_FLIGHT);
+
+		mMaterialUniformManager = FF::MaterialUniformManager::create();
+		mMaterialUniformManager->init(mDevice, mMeshData.materials.size(), mMeshData.materials.empty() ? nullptr : mMeshData.materials.data(), MAX_FRAMES_IN_FLIGHT);
+
+		mSkyboxUniformManager = FF::SkyboxUniformManager::create();
+		mSkyboxUniformManager->init(mDevice, mCommandPool, "assets/piazza_bologni_1k.hdr");
+
+		mDrawDataUniformManager = FF::DrawDataUniformManager::create();
+		mDrawDataUniformManager->init(mDevice, mScene.drawDataArray.size(), mScene.drawDataArray.data(), MAX_FRAMES_IN_FLIGHT);
+
+
+		std::vector<Wrapper::UniformParameter::Ptr> staticParams;
+
+		auto append = [&](const std::vector<Wrapper::UniformParameter::Ptr>& params) {
+			staticParams.insert(staticParams.end(), params.begin(), params.end());
+			};
+
+		append(mTransformUniformManager->getParams());
+		append(mMaterialUniformManager->getParams());
+		append(mSkyboxUniformManager->getParams());
+		append(mDrawDataUniformManager->getParams());
+
+
+		for (auto& p : staticParams) {
+			std::cout << "[DEBUG] Binding " << p->mBinding
+				<< ", Count = " << p->mCount
+				<< ", DescriptorType = " << p->mDescriptorType << std::endl;
+		}
+
+		mDescriptorSetLayout_Static = Wrapper::DescriptorSetLayout::create(mDevice);
+		mDescriptorSetLayout_Static->build(staticParams);
+
+		mDescriptorPool_Static = Wrapper::DescriptorPool::create(mDevice);
+		mDescriptorPool_Static->build(staticParams, 1);
+
+		mDescriptorSet_Static = Wrapper::DescriptorSet::create(
+			mDevice, staticParams,
+			mDescriptorSetLayout_Static,
+			mDescriptorPool_Static,
+			1
+		);
+
+		// ------ TEXTURE DESCRIPTOR SETS ------
+		mSceneTextureManager = FF::SceneTextureManager::create();
+		mSceneTextureManager->init(mDevice, mCommandPool, mSceneMesh, MAX_FRAMES_IN_FLIGHT);
+
+		auto diffuseParams = mSceneTextureManager->getDiffuseParams();
+		mDescriptorSetLayout_Diffuse = Wrapper::DescriptorSetLayout::create(mDevice);
+		mDescriptorSetLayout_Diffuse->build(diffuseParams);
+
+		mDescriptorPool_Diffuse = Wrapper::DescriptorPool::create(mDevice);
+		mDescriptorPool_Diffuse->build(diffuseParams, 1);
+
+		mDescriptorSet_Diffuse = Wrapper::DescriptorSet::create(
+			mDevice, diffuseParams,
+			mDescriptorSetLayout_Diffuse,
+			mDescriptorPool_Diffuse,
+			1);
+
+
+		/*auto emissiveParams = mSceneTextureManager->getEmissiveParams();
+		mDescriptorSetLayout_Emissive = Wrapper::DescriptorSetLayout::create(mDevice);
+		mDescriptorSetLayout_Emissive->build(emissiveParams);
+
+		mDescriptorPool_Emissive = Wrapper::DescriptorPool::create(mDevice);
+		mDescriptorPool_Emissive->build(emissiveParams, 1);
+
+		mDescriptorSet_Emissive = Wrapper::DescriptorSet::create(
+			mDevice, emissiveParams,
+			mDescriptorSetLayout_Emissive,
+			mDescriptorPool_Emissive,
+			1
+		);
+
+		auto occlusionParams = mSceneTextureManager->getOcclusionParams();
+		mDescriptorSetLayout_Occlusion = Wrapper::DescriptorSetLayout::create(mDevice);
+		mDescriptorSetLayout_Occlusion->build(occlusionParams);
+
+		mDescriptorPool_Occlusion = Wrapper::DescriptorPool::create(mDevice);
+		mDescriptorPool_Occlusion->build(occlusionParams, 1);
+
+		mDescriptorSet_Occlusion = Wrapper::DescriptorSet::create(
+			mDevice, occlusionParams,
+			mDescriptorSetLayout_Occlusion,
+			mDescriptorPool_Occlusion,
+			1
+		);*/
+
+
+		mDescriptorSetLayout_Static = Wrapper::DescriptorSetLayout::create(mDevice);
+
+		mDescriptorSetLayout_Static->build(staticParams);
+
+		mDescriptorPool_Static = Wrapper::DescriptorPool::create(mDevice);
+
+		mDescriptorPool_Static->build(staticParams, 1);
+
+		mDescriptorSet_Static = Wrapper::DescriptorSet::create(mDevice, staticParams, mDescriptorSetLayout_Static, mDescriptorPool_Static, 1);
+	}
+
+	void Application::applyCommonPipelineState(const Wrapper::Pipeline::Ptr& pipeline, bool enableDepthWrite, VkCullModeFlagBits cullMode, bool isSceneGraph) {
 		
-		// Viewport & Scissor
-		VkViewport viewport = { 0.0f, (float)mHeight, (float)mWidth, -(float)mHeight, 0.0f, 1.0f };
-		VkRect2D scissor = { {0, 0}, {mWidth, mHeight} };
-		pipeline->setViewports({ viewport });
-		pipeline->setScissors({ scissor });
+		// Dynamic state
+		std::vector<VkDynamicState> dynamicStates = {
+			VK_DYNAMIC_STATE_VIEWPORT,
+			VK_DYNAMIC_STATE_SCISSOR
+		};
+		pipeline->setDynamicStates(dynamicStates);
 
 		// Rasterization
 		pipeline->mRasterState.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
@@ -112,7 +223,7 @@ namespace FF {
 		// Depth stencil
 		pipeline->mDepthStencilState.depthTestEnable = VK_TRUE;
 		pipeline->mDepthStencilState.depthWriteEnable = enableDepthWrite ? VK_TRUE : VK_FALSE;
-		pipeline->mDepthStencilState.depthCompareOp = VK_COMPARE_OP_LESS_OR_EQUAL;
+		pipeline->mDepthStencilState.depthCompareOp = VK_COMPARE_OP_LESS;
 
 		// Blend
 		VkPipelineColorBlendAttachmentState blendAttachment{};
@@ -137,12 +248,26 @@ namespace FF {
 		pipeline->mBlendState.blendConstants[2] = 0.0f;
 		pipeline->mBlendState.blendConstants[3] = 0.0f;
 
-		// Layout
-		pipeline->mLayoutState.setLayoutCount = 1;
-		auto descriptorSetLayoutPtr = mUniformManager->getDescriptorLayout();
-		pipeline->mLayoutState.pSetLayouts = &descriptorSetLayoutPtr->getLayout();
-		pipeline->mLayoutState.pushConstantRangeCount = 0;
-		pipeline->mLayoutState.pPushConstantRanges = nullptr;
+		if (isSceneGraph) {
+			pipeline->mSetLayoutsStorage = {
+				mDescriptorSetLayout_Frame->getLayout(),
+				mDescriptorSetLayout_Static->getLayout(),
+				mDescriptorSetLayout_Diffuse->getLayout(),
+				//mDescriptorSetLayout_Emissive->getLayout(),
+				//mDescriptorSetLayout_Occlusion->getLayout()
+			};
+		}
+		else {
+			pipeline->mSetLayoutsStorage = {
+				mDescriptorSetLayout_Frame->getLayout(),
+				mDescriptorSetLayout_Static->getLayout()
+			};
+		}
+
+		std::cout << "Pipeline using set count = " << pipeline->mSetLayoutsStorage.size() << std::endl;
+		pipeline->mLayoutState.setLayoutCount = static_cast<uint32_t>(pipeline->mSetLayoutsStorage.size());
+		pipeline->mLayoutState.pSetLayouts = pipeline->mSetLayoutsStorage.data();
+		pipeline->mLayoutState.flags = 0;;
 	}
 
 	void Application::createSkyboxPipeline() {
@@ -165,39 +290,34 @@ namespace FF {
 		mSkyboxPipeline->mAssemblyState.primitiveRestartEnable = VK_FALSE;
 
 		// Common states
-		applyCommonPipelineState(mSkyboxPipeline, false, VK_CULL_MODE_FRONT_BIT);
+		applyCommonPipelineState(mSkyboxPipeline, false, VK_CULL_MODE_FRONT_BIT, false);
 
 		// Render pass
 		mSkyboxPipeline->build();
 	}
 
-	void Application::createPipeline() {
+	void Application::createSceneGraphPipeline() {
 
-		// 2 Create shaders
 		std::vector<Wrapper::Shader::Ptr> shaderGroup{};
-		auto shaderVertex = Wrapper::Shader::create(mDevice, "shaders/vs.spv", VK_SHADER_STAGE_VERTEX_BIT, "main");
-		shaderGroup.push_back(shaderVertex);
-		auto shaderFragment = Wrapper::Shader::create(mDevice, "shaders/fs.spv", VK_SHADER_STAGE_FRAGMENT_BIT, "main");
-		shaderGroup.push_back(shaderFragment);
-		mPipeline->setShaderGroup(shaderGroup);
+		shaderGroup.push_back(Wrapper::Shader::create(mDevice, "shaders/sceneGraphvs.spv", VK_SHADER_STAGE_VERTEX_BIT, "main"));
+		shaderGroup.push_back(Wrapper::Shader::create(mDevice, "shaders/sceneGraphfs.spv", VK_SHADER_STAGE_FRAGMENT_BIT, "main"));
+		mSceneGraphPipeline->setShaderGroup(shaderGroup);
 
-		// 3 Vertex stage 
-		auto vertexBindingDes = mModel->getVertexInputBindingDescriptions();
-		auto attributeDes = mModel->getAttributeDescriptions();
+		// Vertex input
+		auto vertexBindingDes = mSceneMesh->getVertexInputBindingDescriptions();
+		auto attributeDes = mSceneMesh->getAttributeDescriptions();
+		mSceneGraphPipeline->mVertexInputState.vertexBindingDescriptionCount = static_cast<uint32_t>(vertexBindingDes.size());
+		mSceneGraphPipeline->mVertexInputState.pVertexBindingDescriptions = vertexBindingDes.data();
+		mSceneGraphPipeline->mVertexInputState.vertexAttributeDescriptionCount = static_cast<uint32_t>(attributeDes.size());
+		mSceneGraphPipeline->mVertexInputState.pVertexAttributeDescriptions = attributeDes.data();
 
-		mPipeline->mVertexInputState.vertexBindingDescriptionCount = vertexBindingDes.size();
-		mPipeline->mVertexInputState.pVertexBindingDescriptions = vertexBindingDes.data();
-		mPipeline->mVertexInputState.vertexAttributeDescriptionCount = attributeDes.size();
-		mPipeline->mVertexInputState.pVertexAttributeDescriptions = attributeDes.data();
+		mSceneGraphPipeline->mAssemblyState.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
+		mSceneGraphPipeline->mAssemblyState.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
+		mSceneGraphPipeline->mAssemblyState.primitiveRestartEnable = VK_FALSE;
 
-		// 4 Assembly stage
-		mPipeline->mAssemblyState.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
-		mPipeline->mAssemblyState.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
-		mPipeline->mAssemblyState.primitiveRestartEnable = VK_FALSE;
+		applyCommonPipelineState(mSceneGraphPipeline, true, VK_CULL_MODE_BACK_BIT, true);
 
-		applyCommonPipelineState(mPipeline, true, VK_CULL_MODE_BACK_BIT);
-
-		mPipeline->build();
+		mSceneGraphPipeline->build();
 	}
 
 	void Application::createRenderPass() {
@@ -283,62 +403,80 @@ namespace FF {
 
 	void Application::createCommandBuffers() {
 
-		for (int i = 0; i < mSwapChain->getImageCount(); ++i) {
+		mCommandBuffers.resize(MAX_FRAMES_IN_FLIGHT);
+
+		for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i) {
 
 			mCommandBuffers[i] = Wrapper::CommandBuffer::create(mDevice, mCommandPool);
-			mCommandBuffers[i]->begin();
 
-			VkRenderPassBeginInfo renderBeginInfo{};
-			renderBeginInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
-			renderBeginInfo.renderPass = mRenderPass->getRenderPass();
-			renderBeginInfo.framebuffer = mSwapChain->getFrameBuffer(i);
-			renderBeginInfo.renderArea.offset = { 0, 0 };
-			renderBeginInfo.renderArea.extent = mSwapChain->getExtent();
-
-			// Clear color
-			std::vector< VkClearValue> clearColors{};
-			VkClearValue finalClearColor{};
-			finalClearColor.color = { 0.09f, 0.125f, 0.192f, 1.0f };
-			clearColors.push_back(finalClearColor);
-
-			VkClearValue mutiClearColor{};
-			mutiClearColor.color = { 0.09f, 0.125f, 0.192f, 1.0f };
-			clearColors.push_back(mutiClearColor);
-
-			VkClearValue depthClearColor{};
-			depthClearColor.depthStencil = { 1.0f, 0 };
-			clearColors.push_back(depthClearColor);
-
-			renderBeginInfo.clearValueCount = static_cast<uint32_t>(clearColors.size());
-			renderBeginInfo.pClearValues = clearColors.data();
-
-			mCommandBuffers[i]->beginRenderPass(renderBeginInfo);
-
-			mCommandBuffers[i]->bindGraphicPipeline(mSkyboxPipeline->getPipeline());
-			mCommandBuffers[i]->bindDescriptorSet(mSkyboxPipeline->getLayout(), mUniformManager->getDescriptorSet(mCurrentFrame));
-			mCommandBuffers[i]->draw(36);
-
-			mCommandBuffers[i]->bindGraphicPipeline(mPipeline->getPipeline());
-			mCommandBuffers[i]->bindDescriptorSet(mPipeline->getLayout(), mUniformManager->getDescriptorSet(mCurrentFrame));
-			mCommandBuffers[i]->bindVertexBuffer(mModel->getVertexBuffers());
-			mCommandBuffers[i]->bindIndexBuffer(mModel->getIndexBuffer()->getBuffer());
-			mCommandBuffers[i]->drawIndex(mModel->getIndexCount());
-
-			mCommandBuffers[i]->endRenderPass();
-			mCommandBuffers[i]->end();
 		}
 	}
 
+	void Application::recordCommandBuffer(uint32_t imageIndex) {
+
+		mCommandBuffers[mCurrentFrame]->begin();
+
+		// --- Begin Render Pass ---
+		VkRenderPassBeginInfo renderBeginInfo{};
+		renderBeginInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+		renderBeginInfo.renderPass = mRenderPass->getRenderPass();
+		renderBeginInfo.framebuffer = mSwapChain->getFrameBuffer(imageIndex);
+		renderBeginInfo.renderArea.offset = { 0, 0 };
+		renderBeginInfo.renderArea.extent = mSwapChain->getExtent();
+
+		std::vector<VkClearValue> clearValues{};
+		clearValues.push_back({ {0.09f, 0.125f, 0.192f, 1.0f} });
+		clearValues.push_back({ {0.09f, 0.125f, 0.192f, 1.0f} });
+		clearValues.push_back({ {1.0f, 0} });
+		renderBeginInfo.clearValueCount = static_cast<uint32_t>(clearValues.size());
+		renderBeginInfo.pClearValues = clearValues.data();
+
+		mCommandBuffers[mCurrentFrame]->beginRenderPass(renderBeginInfo);
+
+		// --- Dynamic State ---
+		VkViewport viewport{};
+		viewport.x = 0.0f;
+		viewport.y = 0.0f;
+		viewport.width = static_cast<float>(mWidth);
+		viewport.height = static_cast<float>(mHeight);
+		viewport.minDepth = 0.0f;
+		viewport.maxDepth = 1.0f;
+		mCommandBuffers[mCurrentFrame]->setViewport(0, viewport);
+
+		VkRect2D scissor{};
+		scissor.offset = { 0, 0 };
+		scissor.extent = { mWidth, mHeight };
+		mCommandBuffers[mCurrentFrame]->setScissor(0, scissor);
+
+		// --- Skybox ---
+		mCommandBuffers[mCurrentFrame]->bindGraphicPipeline(mSkyboxPipeline->getPipeline());
+		mCommandBuffers[mCurrentFrame]->bindDescriptorSet(mSkyboxPipeline->getLayout(), mDescriptorSet_Frame->getDescriptorSet(mCurrentFrame), 0);
+		mCommandBuffers[mCurrentFrame]->bindDescriptorSet(mSkyboxPipeline->getLayout(), mDescriptorSet_Static->getDescriptorSet(0), 1);
+		mCommandBuffers[mCurrentFrame]->draw(36);
+
+		// --- Indirect Model ---
+		mCommandBuffers[mCurrentFrame]->bindGraphicPipeline(mSceneGraphPipeline->getPipeline());
+		mCommandBuffers[mCurrentFrame]->bindDescriptorSet(mSceneGraphPipeline->getLayout(), mDescriptorSet_Frame->getDescriptorSet(mCurrentFrame),0);
+		mCommandBuffers[mCurrentFrame]->bindDescriptorSet(mSceneGraphPipeline->getLayout(), mDescriptorSet_Static->getDescriptorSet(0), 1);
+		mCommandBuffers[mCurrentFrame]->bindDescriptorSet(mSceneGraphPipeline->getLayout(), mDescriptorSet_Diffuse->getDescriptorSet(0), 2);
+		//mCommandBuffers[mCurrentFrame]->bindDescriptorSet(mSceneGraphPipeline->getLayout(), mDescriptorSet_Emissive->getDescriptorSet(0), 3);
+		//mCommandBuffers[mCurrentFrame]->bindDescriptorSet(mSceneGraphPipeline->getLayout(), mDescriptorSet_Occlusion->getDescriptorSet(0), 4);
+		mSceneMesh->draw(mCommandBuffers[mCurrentFrame]);
+		mCommandBuffers[mCurrentFrame]->endRenderPass();
+		mCommandBuffers[mCurrentFrame]->end();
+
+	}
+
 	void Application::createSyncObjects() {
-		for (int i = 0; i < mSwapChain->getImageCount(); ++i) {
-			auto imageSemaphore = Wrapper::Semaphore::create(mDevice);
-			mImageAvailableSemaphores.push_back(imageSemaphore);
 
-			auto renderSemaphore = Wrapper::Semaphore::create(mDevice);
-			mRenderFinishedSemaphores.push_back(renderSemaphore);
+		mImageAvailableSemaphores.resize(MAX_FRAMES_IN_FLIGHT);
+		mRenderFinishedSemaphores.resize(MAX_FRAMES_IN_FLIGHT);
+		mInFlightFences.resize(MAX_FRAMES_IN_FLIGHT);
 
-			auto fence = Wrapper::Fence::create(mDevice);
-			mFences.push_back(fence);
+		for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i) {
+			mImageAvailableSemaphores[i] = Wrapper::Semaphore::create(mDevice);
+			mRenderFinishedSemaphores[i] = Wrapper::Semaphore::create(mDevice);
+			mInFlightFences[i] = Wrapper::Fence::create(mDevice);
 		}
 	}
 
@@ -365,37 +503,39 @@ namespace FF {
 		mWidth = mSwapChain->getExtent().width;
 		mHeight = mSwapChain->getExtent().height;
 
-		// Render pass
-		mRenderPass = Wrapper::RenderPass::create(mDevice);
-		createRenderPass();
+		//// Render pass
+		//mRenderPass = Wrapper::RenderPass::create(mDevice);
+		//createRenderPass();
 
 		mSwapChain->createFrameBuffers(mRenderPass);
 
-		// 3 Start render
-		// 3.1 Pipeline
-		mPipeline = Wrapper::Pipeline::create(mDevice, mRenderPass);
-		mSkyboxPipeline = Wrapper::Pipeline::create(mDevice, mRenderPass);
-		createPipeline();
-		createSkyboxPipeline();
+		//// 3 Start render
+		//// 3.1 Pipeline
+		//mSkyboxPipeline = Wrapper::Pipeline::create(mDevice, mRenderPass);
+		//createSkyboxPipeline();
+		//
+		//mSceneGraphPipeline = Wrapper::Pipeline::create(mDevice, mRenderPass);
+		//createSceneGraphPipeline();
 
-		// 3.2 Command buffer
-		mCommandBuffers.resize(mSwapChain->getImageCount());
-		createCommandBuffers();
+		//// 3.2 Command buffer
+		//createCommandBuffers();
 
-		// 3.3 Sync
-		createSyncObjects();
+		//// 3.3 Sync
+		//createSyncObjects();
+
 	}
 
 	void Application::cleanupSwapChain() {
 		
 		mSwapChain.reset();
-		mCommandBuffers.clear();
-		mPipeline.reset();
-		mRenderPass.reset();
+		//mCommandBuffers.clear();
+		//mSkyboxPipeline.reset();
+		//mSceneGraphPipeline.reset();
+		//mRenderPass.reset();
 
-		mImageAvailableSemaphores.clear();
-		mRenderFinishedSemaphores.clear();
-		mFences.clear();
+		//mImageAvailableSemaphores.clear();
+		//mRenderFinishedSemaphores.clear();
+		//mInFlightFences.clear();
 	}
 
 	void Application::mainLoop() {
@@ -405,14 +545,7 @@ namespace FF {
 			mWindow->pollEvents();
 			mWindow->processEvent();
 
-			mModel->update();
-
-			mVPMatrices.mViewMatrix = mCamera.getViewMatrix();
-			mVPMatrices.mProjectionMatrix = mCamera.getProjectMatrix();
-			mUniformManager->update(mVPMatrices, mModel->getUniform(), mCurrentFrame);
-
 			render();
-
 		}
 
 		vkDeviceWaitIdle(mDevice->getDevice());
@@ -420,7 +553,7 @@ namespace FF {
 
 	void Application::render() {
 
-		mFences[mCurrentFrame]->block();
+		mInFlightFences[mCurrentFrame]->block();
 
 		// 1 Get next frame
 		uint32_t imageIndex{ 0 };
@@ -438,6 +571,15 @@ namespace FF {
 			throw std::runtime_error("Error: failed to acquire next image");
 		}
 
+		// 1.2 Update 
+		mCamera.updatePitch(0.001f);
+		mFrameUniformManager->update(mCamera.getViewMatrix(), mCamera.getProjectMatrix(), mDescriptorSet_Frame, mCurrentFrame);
+		mInFlightFences[mCurrentFrame]->resetFence();
+
+		// 1.3 Record commands
+		vkResetCommandBuffer(mCommandBuffers[mCurrentFrame]->getCommandBuffer(), 0);
+		recordCommandBuffer(imageIndex);
+
 		// 2 Submit info
 		VkSubmitInfo submitInfo{};
 		submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
@@ -451,7 +593,7 @@ namespace FF {
 		submitInfo.pWaitDstStageMask = waitStages;
 
 		// 2.2 command buffer
-		auto commandBuffer = mCommandBuffers[imageIndex]->getCommandBuffer();
+		auto commandBuffer = mCommandBuffers[mCurrentFrame]->getCommandBuffer();
 		submitInfo.commandBufferCount = 1;
 		submitInfo.pCommandBuffers = &commandBuffer;
 
@@ -461,8 +603,7 @@ namespace FF {
 		submitInfo.pSignalSemaphores = signalSemaphores;
 
 		// 2.4 Submit render command
-		mFences[mCurrentFrame]->resetFence();
-		if (vkQueueSubmit(mDevice->getGraphicQueue(), 1, &submitInfo, mFences[mCurrentFrame]->getFence()) != VK_SUCCESS) {
+		if (vkQueueSubmit(mDevice->getGraphicQueue(), 1, &submitInfo, mInFlightFences[mCurrentFrame]->getFence()) != VK_SUCCESS) {
 
 			throw std::runtime_error("Error: failed to submit renderCommand");
 		}
@@ -479,7 +620,6 @@ namespace FF {
 		presentInfo.pSwapchains = swapChains;
 		presentInfo.pImageIndices = &imageIndex;
 
-
 		// 3.2 Submit present command
 		result = vkQueuePresentKHR(mDevice->getPresentQueue(), &presentInfo);
 
@@ -491,15 +631,41 @@ namespace FF {
 			throw std::runtime_error("Error: failed to present");
 		}
 
-		mCurrentFrame = (mCurrentFrame + 1) % mSwapChain->getImageCount();
+		mCurrentFrame = (mCurrentFrame + 1) % MAX_FRAMES_IN_FLIGHT;
 	}
 
 	void Application::cleanUp() {
 
-		mSkyboxPipeline.reset();
-		mPipeline.reset();
-		mRenderPass.reset();
+		// Swapchain first
 		mSwapChain.reset();
+
+		// Descriptor Sets
+		mDescriptorSet_Frame.reset();
+		mDescriptorPool_Frame.reset();
+		mDescriptorSetLayout_Frame.reset();
+
+		mDescriptorSet_Static.reset();
+		mDescriptorPool_Static.reset();
+		mDescriptorSetLayout_Static.reset();
+
+		// Uniform Managers
+		mFrameUniformManager.reset();
+		mTransformUniformManager.reset();
+		mMaterialUniformManager.reset();
+		mSkyboxUniformManager.reset();
+		mSceneTextureManager.reset();
+
+		mSkyboxPipeline.reset();
+		mSceneGraphPipeline.reset();
+		mRenderPass.reset();
+
+		mImageAvailableSemaphores.clear();
+		mRenderFinishedSemaphores.clear();
+		mInFlightFences.clear();
+
+		mSceneMesh.reset();
+	
+		mCommandPool.reset();
 		mDevice.reset();
 		mSurface.reset();
 		mInstance.reset();

@@ -1,6 +1,6 @@
-#version 460
+#version 450
 
-layout(binding = 0) uniform VPMatrices {
+layout(set = 0, binding = 0) uniform VPMatrices {
     mat4 mViewMatrix;
     mat4 mProjectionMatrix;
 } vpUBO;
@@ -41,7 +41,13 @@ void main() {
 
     int idx = indices[gl_VertexIndex];
     vec3 pos = positions[idx];
+
     vDirection = rotateX90() * pos;
+
     mat4 viewRotOnly = mat4(mat3(vpUBO.mViewMatrix));
-    gl_Position = vpUBO.mProjectionMatrix * viewRotOnly * vec4(pos, 1.0);
+    vec4 clip = vpUBO.mProjectionMatrix * viewRotOnly * vec4(pos, 1.0);
+
+    clip.z = clip.w * 0.99999;
+
+    gl_Position = clip;
 }

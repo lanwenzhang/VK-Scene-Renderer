@@ -4,7 +4,7 @@
 
 namespace FF::Wrapper {
 
-	Buffer::Ptr Buffer::createVertexBuffer(const Device::Ptr& device, VkDeviceSize size, void* pData) {
+	Buffer::Ptr Buffer::createVertexBuffer(const Device::Ptr& device, VkDeviceSize size, const void* pData) {
 		
 		auto buffer = Buffer::create(
 			device, size,
@@ -17,7 +17,7 @@ namespace FF::Wrapper {
 		return buffer;
 	}
 
-	Buffer::Ptr Buffer::createIndexBuffer(const Device::Ptr& device, VkDeviceSize size, void* pData) {
+	Buffer::Ptr Buffer::createIndexBuffer(const Device::Ptr& device, VkDeviceSize size, const void* pData) {
 		
 		auto buffer = Buffer::create(
 			device, size,
@@ -30,7 +30,7 @@ namespace FF::Wrapper {
 		return buffer;
 	}
 
-	Buffer::Ptr Buffer::createUniformBuffer(const Device::Ptr& device, VkDeviceSize size, void* pData) {
+	Buffer::Ptr Buffer::createUniformBuffer(const Device::Ptr& device, VkDeviceSize size, const void* pData) {
 		
 		auto buffer = Buffer::create(device, size, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
 
@@ -42,7 +42,7 @@ namespace FF::Wrapper {
 		return buffer;
 	}
 
-	Buffer::Ptr Buffer::createStageBuffer(const Device::Ptr& device, VkDeviceSize size, void* pData) {
+	Buffer::Ptr Buffer::createStageBuffer(const Device::Ptr& device, VkDeviceSize size, const void* pData) {
 
 		auto buffer = Buffer::create(device, size, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
 
@@ -54,7 +54,27 @@ namespace FF::Wrapper {
 		return buffer;
 	}
 
-	Buffer::Buffer(const Device::Ptr& device, VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties){
+	Buffer::Ptr Buffer::createStorageBuffer(const Device::Ptr& device, VkDeviceSize size, const void* pData, bool supportDeviceAddress) {
+
+		VkBufferUsageFlags usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT;
+
+		if (supportDeviceAddress) {
+
+			usage |= VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
+		}
+
+		auto buffer = create(device, size, usage, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, supportDeviceAddress); 
+
+		if (pData != nullptr) {
+
+			buffer->updateBufferByStage(pData, size);
+
+		}
+
+		return buffer;
+	}
+
+	Buffer::Buffer(const Device::Ptr& device, VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties, bool supportDeviceAddress){
 	
 		mDevice = device;
 
@@ -77,19 +97,22 @@ namespace FF::Wrapper {
 		VkMemoryRequirements memReq{};
 		vkGetBufferMemoryRequirements(mDevice->getDevice(), mBuffer, &memReq);
 
+		VkMemoryAllocateFlagsInfo flagsInfo{};
+		flagsInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_FLAGS_INFO;
+		flagsInfo.flags = supportDeviceAddress ? VK_MEMORY_ALLOCATE_DEVICE_ADDRESS_BIT : 0;
+
 		VkMemoryAllocateInfo allocInfo{};
 		allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
 		allocInfo.allocationSize = memReq.size;
-
-		// 2.2 Check if required the memory type provided by device 
 		allocInfo.memoryTypeIndex = findMemoryType(memReq.memoryTypeBits, properties);
+		allocInfo.pNext = supportDeviceAddress ? &flagsInfo : nullptr;
 
-		// 2.3 Allocate memory
+		// 2.2 Allocate memory
 		if (vkAllocateMemory(mDevice->getDevice(), &allocInfo, nullptr, &mBufferMemory) != VK_SUCCESS) {
 			throw std::runtime_error("Error: failed to allocate memory");
 		}
 
-		// 2.4 Bind buffer handle with buffer memory
+		// 3 Bind buffer handle with buffer memory
 		vkBindBufferMemory(mDevice->getDevice(), mBuffer, mBufferMemory, 0);
 
 		mBufferInfo.buffer = mBuffer;
@@ -116,7 +139,7 @@ namespace FF::Wrapper {
 		throw std::runtime_error("Error: cannot find the property memory type!");
 	}
 
-	void Buffer::updateBufferByMap(void* data, size_t size) {
+	void Buffer::updateBufferByMap(const void* data, size_t size) {
 		
 		void* memPtr = nullptr;
 
@@ -126,13 +149,26 @@ namespace FF::Wrapper {
 
 	}
 
-	void Buffer::updateBufferByStage(void* data, size_t size) {
+	void Buffer::updateBufferByStage(const void* data, size_t size) {
 		
 		auto stageBuffer = Buffer::create(mDevice, size, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
 
 		stageBuffer->updateBufferByMap(data, size);
 
 		copyBuffer(stageBuffer->getBuffer(), mBuffer, static_cast<VkDeviceSize>(size));
+	}
+
+	void Buffer::updateBufferByStage(const void* data, size_t size, size_t offset) {
+		auto stageBuffer = Buffer::create(
+			mDevice,
+			size,
+			VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+			VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT
+		);
+
+		stageBuffer->updateBufferByMap(data, size);
+
+		copyBuffer(stageBuffer->getBuffer(), mBuffer, static_cast<VkDeviceSize>(size), static_cast<VkDeviceSize>(offset));
 	}
 
 	void Buffer::copyBuffer(const VkBuffer& srcBuffer, const VkBuffer& dstBuffer, VkDeviceSize size) {
@@ -149,6 +185,24 @@ namespace FF::Wrapper {
 
 		commandBuffer->end();
 
+		commandBuffer->submitSync(mDevice->getGraphicQueue(), VK_NULL_HANDLE);
+	}
+
+	void Buffer::copyBuffer(const VkBuffer& srcBuffer, const VkBuffer& dstBuffer, VkDeviceSize size, VkDeviceSize dstOffset) {
+
+		auto commandPool = CommandPool::create(mDevice);
+		auto commandBuffer = CommandBuffer::create(mDevice, commandPool);
+
+		commandBuffer->begin(VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT);
+
+		VkBufferCopy copyInfo{};
+		copyInfo.srcOffset = 0;
+		copyInfo.dstOffset = dstOffset;
+		copyInfo.size = size;
+
+		commandBuffer->copyBufferToBuffer(srcBuffer, dstBuffer, 1, { copyInfo });
+
+		commandBuffer->end();
 		commandBuffer->submitSync(mDevice->getGraphicQueue(), VK_NULL_HANDLE);
 	}
 

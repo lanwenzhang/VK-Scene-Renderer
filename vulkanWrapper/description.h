@@ -16,11 +16,14 @@ namespace FF::Wrapper {
 
 		uint32_t				mCount{ 0 };
 		VkDescriptorType		mDescriptorType;
-		VkShaderStageFlagBits	mStage;
+		VkShaderStageFlags      mStage;
 
 		std::vector<Buffer::Ptr> mBuffers{};
 		Texture::Ptr mTexture{ nullptr };
+		std::vector<Texture::Ptr> mTextures{};
 		CubeMapTexture::Ptr mCubeMap{ nullptr };
+
+		std::vector<VkDescriptorImageInfo> mImageInfos{};
 	};
 
 }

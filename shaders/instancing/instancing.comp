@@ -1,0 +1,63 @@
+#version 450
+#extension GL_EXT_buffer_reference : enable
+#extension GL_EXT_scalar_block_layout : enable
+#extension GL_ARB_gpu_shader_int64 : enable
+
+layout(local_size_x = 32, local_size_y = 1, local_size_z = 1) in;
+
+layout(push_constant) uniform PushConstants {
+    mat4 vpMatrices;
+    uint64_t bufferPosAngle;
+    uint64_t bufferMatrices;
+    float time;
+    uint instanceCount;
+};
+
+layout(buffer_reference, std430) readonly buffer PosBuffer {
+    vec4 posAngle[];
+};
+
+layout(buffer_reference, std430) writeonly buffer MatBuffer {
+    mat4 model[];
+};
+
+
+mat4 rotate(float angle, vec3 axis) {
+    float c = cos(angle);
+    float s = sin(angle);
+    float oc = 1.0 - c;
+    
+    mat3 r = mat3(
+        oc * axis.x * axis.x + c,         oc * axis.x * axis.y - axis.z * s, oc * axis.z * axis.x + axis.y * s,
+        oc * axis.x * axis.y + axis.z * s, oc * axis.y * axis.y + c,         oc * axis.y * axis.z - axis.x * s,
+        oc * axis.z * axis.x - axis.y * s, oc * axis.y * axis.z + axis.x * s, oc * axis.z * axis.z + c
+    );
+
+    mat4 result = mat4(1.0);
+    result[0].xyz = r[0];
+    result[1].xyz = r[1];
+    result[2].xyz = r[2];
+    return result;
+}
+
+void main() {
+    uint id = gl_GlobalInvocationID.x;
+    if (id >= instanceCount) return;
+
+    PosBuffer posBuffer = PosBuffer(bufferPosAngle);
+    MatBuffer matBuffer = MatBuffer(bufferMatrices);
+
+    vec4 data = posBuffer.posAngle[id];
+    vec3 pos = data.xyz;
+    float angle = data.w + time;
+
+    mat4 model = mat4(1.0);
+    model[3].xyz = pos; // translation
+    model = rotate(angle, normalize(pos)) * model;
+
+    matBuffer.model[id] = model;
+}
+
+
+
+

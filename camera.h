@@ -1,34 +1,8 @@
 #pragma once
-#include"Base.h"
+#include "base.h"
 
-enum class CAMERA_MOVE
-{
-	MOVE_LEFT,
-	MOVE_RIGHT,
-	MOVE_FRONT,
-	MOVE_BACK
-};
 
-class Camera
-{
-private:
-
-	glm::vec3	m_position;
-	glm::vec3	m_front;
-	glm::vec3	m_up;
-	float		m_speed;
-
-	float		m_pitch;
-	float		m_yaw;
-	float		m_sensitivity;
-
-	float		m_xpos;
-	float       m_ypos;
-	bool		m_firstMove;
-
-	glm::mat4	m_vMatrix;
-	glm::mat4	m_pMatrx;
-
+class Camera {
 public:
 	Camera()
 	{
@@ -48,28 +22,54 @@ public:
 		m_vMatrix = glm::mat4(1.0f);
 	}
 
-	~Camera()
-	{
+	~Camera(){}
 
-	}
+	void setMouseControl(bool enable) { m_enableMouseControl = enable; }
 	void lookAt(glm::vec3 _pos, glm::vec3 _front, glm::vec3 _up);
 	void update();
+	void updatePitch(float deltaAngle);
 
 	glm::mat4 getViewMatrix();
 	glm::mat4 getProjectMatrix();
+	glm::mat4 getViewProjectionMatrix();
 
-	void  setSpeed(float _speed)
+
+	void move(CAMERA_MOVE _mode);
+	void setSpeed(float _speed)
 	{
 		m_speed = _speed;
 	}
 
-	void move(CAMERA_MOVE _mode);
-
 	void pitch(float _yOffset);
 	void yaw(float _xOffset);
 	void setSentitivity(float _s);
+	void setPosition(const glm::vec3& pos);
+
 	void onMouseMove(double _xpos, double _ypos);
 
 	void setPerpective(float angle, float ratio, float near, float far);
+
+
+public:
+	float       m_pitchAngle;
+private:
+
+	glm::vec3	m_position;
+	glm::vec3	m_front;
+	glm::vec3	m_up;
+	float		m_speed;
+
+	float		m_pitch;
+	float		m_yaw;
+	float		m_sensitivity;
+
+	float		m_xpos;
+	float       m_ypos;
+	bool		m_firstMove;
+
+	glm::mat4	m_vMatrix;
+	glm::mat4	m_pMatrix;
+
+	bool m_enableMouseControl = false;
 };
 

@@ -15,22 +15,19 @@ namespace FF {
             throw std::runtime_error("Error: failed to load model with Assimp");
         }
 
-
         mPositions.clear();
         mUVs.clear();
         mIndexDatas.clear();
 
-
         const aiMesh* mesh = scene->mMeshes[0];
 
-
-        for (unsigned int i = 0; i < mesh->mNumVertices; i++) {
+        for (uint32_t i = 0; i < mesh->mNumVertices; i++) {
     
             mPositions.push_back(mesh->mVertices[i].x);
             mPositions.push_back(mesh->mVertices[i].y);
             mPositions.push_back(mesh->mVertices[i].z);
 
-      
+   
             if (mesh->HasTextureCoords(0)) {
                 mUVs.push_back(mesh->mTextureCoords[0][i].x);
                 mUVs.push_back(mesh->mTextureCoords[0][i].y);
@@ -42,12 +39,12 @@ namespace FF {
         }
 
      
-        for (unsigned int f = 0; f < mesh->mNumFaces; f++) {
+        for (uint32_t f = 0; f < mesh->mNumFaces; f++) {
             const aiFace& face = mesh->mFaces[f];
  
             if (face.mNumIndices != 3) continue;
 
-            for (unsigned int j = 0; j < 3; j++) {
+            for (uint32_t j = 0; j < 3; j++) {
                 mIndexDatas.push_back(face.mIndices[j]);
             }
         }

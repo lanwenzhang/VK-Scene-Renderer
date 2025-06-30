@@ -93,7 +93,50 @@ namespace FF::Wrapper {
 		VkPhysicalDeviceFeatures deviceFeatures;
 		vkGetPhysicalDeviceFeatures(device, &deviceFeatures);
 
-		return deviceProp.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU && deviceFeatures.geometryShader && deviceFeatures.samplerAnisotropy;
+		uint32_t extensionCount;
+		vkEnumerateDeviceExtensionProperties(device, nullptr, &extensionCount, nullptr);
+		std::vector<VkExtensionProperties> availableExtensions(extensionCount);
+		vkEnumerateDeviceExtensionProperties(device, nullptr, &extensionCount, availableExtensions.data());
+
+		std::set<std::string> requiredExtensions(deviceRequiredExtensions.begin(), deviceRequiredExtensions.end());
+		for (const auto& ext : availableExtensions) {
+			requiredExtensions.erase(ext.extensionName);
+		}
+		if (!requiredExtensions.empty()) {
+			std::cerr << "Missing required device extensions!\n";
+			return false;
+		}
+
+		VkPhysicalDeviceDescriptorIndexingFeatures indexingFeaturesCheck{};
+		indexingFeaturesCheck.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_INDEXING_FEATURES;
+		indexingFeaturesCheck.pNext = nullptr;
+
+		VkPhysicalDeviceBufferDeviceAddressFeatures bufferAddressFeatureCheck{};
+		bufferAddressFeatureCheck.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_BUFFER_DEVICE_ADDRESS_FEATURES;
+		bufferAddressFeatureCheck.pNext = &indexingFeaturesCheck;
+
+		VkPhysicalDeviceFeatures2 features2{};
+		features2.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2;
+		features2.pNext = &bufferAddressFeatureCheck;
+		vkGetPhysicalDeviceFeatures2(device, &features2);
+
+		bool supported =
+			deviceProp.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU &&
+			features2.features.geometryShader &&
+			features2.features.samplerAnisotropy &&
+			bufferAddressFeatureCheck.bufferDeviceAddress &&
+			indexingFeaturesCheck.runtimeDescriptorArray &&
+			indexingFeaturesCheck.shaderSampledImageArrayNonUniformIndexing &&
+			indexingFeaturesCheck.descriptorBindingPartiallyBound &&
+			indexingFeaturesCheck.descriptorBindingVariableDescriptorCount &&
+			indexingFeaturesCheck.descriptorBindingSampledImageUpdateAfterBind;
+			
+		if (!supported) {
+			std::cerr << "Device is missing required features for descriptor indexing or buffer device address.\n";
+		}
+
+		return supported;
+
 	}
 
 	void Device::initQueueFamilies(VkPhysicalDevice device) {
@@ -121,6 +164,13 @@ namespace FF::Wrapper {
 				mPresentQueueFamily = i;
 			}
 
+			// 3 Find compute queue
+
+			if (queueFamily.queueCount > 0 && (queueFamily.queueFlags & VK_QUEUE_COMPUTE_BIT)) {
+				
+				mComputeQueueFamily = i;
+			}
+
 
 			if (isQueueFamilyComplete()) {
 
@@ -134,7 +184,7 @@ namespace FF::Wrapper {
 	void Device::createLogicalDevice() {
 
 		std::vector<VkDeviceQueueCreateInfo> queueCreateInfos;
-		std::set<uint32_t> queueFamilies = { mGraphicQueueFamily.value(), mPresentQueueFamily.value() };
+		std::set<uint32_t> queueFamilies = { mGraphicQueueFamily.value(), mPresentQueueFamily.value(), mComputeQueueFamily.value() };
 		float queuePriority = 1.0;
 
 		// 1 Fill in queue family create info
@@ -150,17 +200,47 @@ namespace FF::Wrapper {
 		}
 	
 		// 2 Fill in device create info
-		VkPhysicalDeviceFeatures deviceFeatures = {};
-		deviceFeatures.samplerAnisotropy = VK_TRUE;
+		// 2.1 Vulkan 1.1 features
+		VkPhysicalDeviceVulkan11Features features11{};
+		features11.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_1_FEATURES;
+		features11.shaderDrawParameters = VK_TRUE;
 
-		VkDeviceCreateInfo deviceCreateInfo = {};
+		// 2.2 Device address features
+		VkPhysicalDeviceBufferDeviceAddressFeatures bufferDeviceAddressFeatures{};
+		bufferDeviceAddressFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_BUFFER_DEVICE_ADDRESS_FEATURES;
+		bufferDeviceAddressFeatures.bufferDeviceAddress = VK_TRUE;
+
+		// 2.3 Descriptor indexing features
+		VkPhysicalDeviceDescriptorIndexingFeatures indexingFeatures{};
+		indexingFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_INDEXING_FEATURES;
+		indexingFeatures.runtimeDescriptorArray = VK_TRUE;
+		indexingFeatures.shaderSampledImageArrayNonUniformIndexing = VK_TRUE;
+		indexingFeatures.descriptorBindingPartiallyBound = VK_TRUE;
+		indexingFeatures.descriptorBindingVariableDescriptorCount = VK_TRUE;
+		indexingFeatures.descriptorBindingSampledImageUpdateAfterBind = VK_TRUE;
+
+		indexingFeatures.pNext = nullptr;
+		bufferDeviceAddressFeatures.pNext = &indexingFeatures;
+		features11.pNext = &bufferDeviceAddressFeatures;
+
+		// 2.4 Base features2
+		VkPhysicalDeviceFeatures2 deviceFeatures{};
+		deviceFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2;
+		deviceFeatures.features.shaderInt64 = VK_TRUE;
+		deviceFeatures.features.samplerAnisotropy = VK_TRUE;
+		deviceFeatures.features.multiDrawIndirect = VK_TRUE;
+
+		// deviceCreateInfo
+		deviceFeatures.pNext = &features11;
+
+		VkDeviceCreateInfo deviceCreateInfo{};
 		deviceCreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
 		deviceCreateInfo.pQueueCreateInfos = queueCreateInfos.data();
 		deviceCreateInfo.queueCreateInfoCount = static_cast<uint32_t>(queueCreateInfos.size());
-		deviceCreateInfo.pEnabledFeatures = &deviceFeatures;
 		deviceCreateInfo.enabledExtensionCount = static_cast<uint32_t>(deviceRequiredExtensions.size());
 		deviceCreateInfo.ppEnabledExtensionNames = deviceRequiredExtensions.data();
-
+		deviceCreateInfo.pEnabledFeatures = nullptr;
+		deviceCreateInfo.pNext = &deviceFeatures;
 
 		// 3 Enable validation layer
 		if (mInstance->getEnableValidationLayer()) {
@@ -177,16 +257,29 @@ namespace FF::Wrapper {
 			throw std::runtime_error("Error:failed to create logical device");
 		}
 
+
+		fpGetBufferDeviceAddress = reinterpret_cast<PFN_vkGetBufferDeviceAddress>(vkGetDeviceProcAddr(mDevice, "vkGetBufferDeviceAddress"));
+
+		if (!fpGetBufferDeviceAddress) {
+			throw std::runtime_error("Error: failed to load vkGetBufferDeviceAddress");
+		}
+
+
 		// 5 Create queue
 		vkGetDeviceQueue(mDevice, mGraphicQueueFamily.value(), 0, &mGraphicQueue);
-
-
 		vkGetDeviceQueue(mDevice, mPresentQueueFamily.value(), 0, &mPresentQueue);
+		vkGetDeviceQueue(mDevice, mComputeQueueFamily.value(), 0, &mComputeQueue);
+	}
+
+
+	PFN_vkGetBufferDeviceAddress Device::getBufferDeviceAddressFunction() const {
+		
+		return fpGetBufferDeviceAddress;
 	}
 
 	bool Device::isQueueFamilyComplete() {
 
-		return mGraphicQueueFamily.has_value() && mPresentQueueFamily.has_value();
+		return mGraphicQueueFamily.has_value() && mPresentQueueFamily.has_value() && mComputeQueueFamily.has_value();
 
 	}
 

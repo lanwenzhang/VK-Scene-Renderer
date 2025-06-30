@@ -27,6 +27,8 @@ SYSTEM ${CMAKE_CURRENT_SOURCE_DIR}/../thirdParty/vulkan/Lib
 add_subdirectory(vulkanWrapper)
 add_subdirectory(texture)
 add_subdirectory(tools)
+add_subdirectory(scene)
+add_subdirectory(uniform)
 
 # 5 Main directory
 # 5.1 Collect all .cpp and .c  to variable
@@ -36,4 +38,4 @@ aux_source_directory(. DIRSRCS)
 add_executable(Vulkan ${DIRSRCS})
 
 # 6 Link subdirectory .cpp and third party .lib
-target_link_libraries(Vulkan vulkanLib textureLib toolsLib vulkan-1.lib glfw3.lib assimp-vc143-mtd.lib zlibstaticd.lib)
+target_link_libraries(Vulkan vulkanLib uniformLib textureLib toolsLib sceneLib vulkan-1.lib glfw3.lib assimp-vc143-mtd.lib zlibstaticd.lib)

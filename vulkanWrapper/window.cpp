@@ -45,7 +45,7 @@ namespace FF::Wrapper {
 		glfwSetWindowUserPointer(mWindow, this);
 		glfwSetFramebufferSizeCallback(mWindow, windowResized);
 		glfwSetCursorPosCallback(mWindow, cursorPosCallBack);
-		glfwSetInputMode(mWindow, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
+		glfwSetInputMode(mWindow, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
 	}
 
 	Window::~Window() {
@@ -95,5 +95,14 @@ namespace FF::Wrapper {
 		if (glfwGetKey(mWindow, GLFW_KEY_D) == GLFW_PRESS) {
 			app->onKeyDown(CAMERA_MOVE::MOVE_RIGHT);
 		}
+
+		if (glfwGetMouseButton(mWindow, GLFW_MOUSE_BUTTON_LEFT) == GLFW_PRESS) {
+			
+			app->enableMouseControl(true);
+		}
+		else {
+			app->enableMouseControl(false);
+		}
+
 	}
 }

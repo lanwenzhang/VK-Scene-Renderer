@@ -58,15 +58,15 @@ namespace FF::Wrapper {
 		appInfo.applicationVersion = VK_MAKE_VERSION(1, 0, 0);
 		appInfo.pEngineName = "NO ENGINE";
 		appInfo.engineVersion = VK_MAKE_VERSION(1, 0, 0);
-		appInfo.apiVersion = VK_API_VERSION_1_0;
+		appInfo.apiVersion = VK_API_VERSION_1_2;
 
 		// 2 Instance info
+		auto extensions = getRequiredExtensions();
 		VkInstanceCreateInfo instCreateInfo = {};
 		instCreateInfo.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
 		instCreateInfo.pApplicationInfo = &appInfo;
 
 		// 2.1 Enable extensions
-		auto extensions = getRequiredExtensions();
 		instCreateInfo.enabledExtensionCount = static_cast<uint32_t>(extensions.size());
 		instCreateInfo.ppEnabledExtensionNames = extensions.data();
 
@@ -119,7 +119,7 @@ namespace FF::Wrapper {
 		std::vector<const char*> extensions(glfwExtensions, glfwExtensions + glfwExtensionCount);
 
 		extensions.push_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
-
+		extensions.push_back(VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME); 
 		return extensions;
 	}
 

@@ -21,6 +21,8 @@ namespace FF {
 		~CubeMapTexture();
 
 		[[nodiscard]] VkDescriptorImageInfo& getImageInfo() { return mImageInfo; }
+		[[nodiscard]] VkImageView getImageView() const { return mImageInfo.imageView; }
+		[[nodiscard]] VkSampler getSampler() const { return mImageInfo.sampler; }
 
 	private:
 

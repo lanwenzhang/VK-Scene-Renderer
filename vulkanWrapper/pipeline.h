@@ -21,7 +21,7 @@ namespace FF::Wrapper {
 
 		void setViewports(const std::vector<VkViewport>& viewports) { mViewports = viewports; }
 		void setScissors(const std::vector<VkRect2D>& scissors) { mScissors = scissors; }
-
+		void setDynamicStates(const std::vector<VkDynamicState>& dynamicStates);
 		void pushBlendAttachments(const VkPipelineColorBlendAttachmentState& blendAttachment) {
 
 			mBlendAttachmentStates.push_back(blendAttachment);
@@ -45,6 +45,10 @@ namespace FF::Wrapper {
 		VkPipelineDepthStencilStateCreateInfo mDepthStencilState{};
 		VkPipelineLayoutCreateInfo mLayoutState{};
 
+		VkPipelineDynamicStateCreateInfo mDynamicState{};
+		std::vector<VkDynamicState> mDynamicStatesStorage{};
+
+		std::vector<VkDescriptorSetLayout> mSetLayoutsStorage{};
 
 	private:
 
@@ -52,7 +56,7 @@ namespace FF::Wrapper {
 		RenderPass::Ptr mRenderPass{ nullptr };
 		VkPipeline mPipeline{ VK_NULL_HANDLE };
 		VkPipelineLayout mLayout{ VK_NULL_HANDLE };
-
+		
 		std::vector<Shader::Ptr> mShaders{};
 		std::vector<VkViewport> mViewports{};
 		std::vector<VkRect2D> mScissors{};

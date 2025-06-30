@@ -9,8 +9,8 @@ A real-time Vulkan renderer supporting large-scale 3D scenes, with scene graph m
 
 ### Windows
 ```
-git clone --recursive https://github.com/lanwenzhang/OBJ-Model-Renderer.git
-cd OBJ-Model-Renderer
+git clone --recursive https://github.com/lanwenzhang/LZ-Scene-Renderer.git
+cd LZ-Scene-Renderer
 mkdir build
 cd build
 cmake -G "Visual Studio 17 2022" -A x64 ..

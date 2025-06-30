@@ -1,10 +1,9 @@
 #include <iostream>
-#include "application.h"
-
+#include "core/application.h"
 
 int main(){
 
-    std::shared_ptr<FF::Application> app = std::make_shared<FF::Application>();
+    std::shared_ptr<LZ::Core::Application> app = std::make_shared<LZ::Core::Application>();
 
     try {
 

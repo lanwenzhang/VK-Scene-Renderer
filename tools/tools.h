@@ -1,6 +1,6 @@
 #include "bitmap.h"
 
-namespace FF {
+namespace LZ::Tools {
 
 	class Tools {
 	public:

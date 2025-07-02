@@ -2,7 +2,7 @@
 
 #include "../common.h"
 
-namespace LZ::Tools {
+namespace lzvk::tools {
 
     enum BitmapFormat {
         UnsignedByte,

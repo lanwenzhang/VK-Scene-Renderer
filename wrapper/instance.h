@@ -1,9 +1,9 @@
 #pragma once
 
 #include "../common.h"
-#include "vulkanConfig.h"
+#include "vulkan_config.h"
 
-namespace LZ::Wrapper {
+namespace lzvk::wrapper {
 
 	class Instance {
 	public:

@@ -3,7 +3,7 @@
 #include "../common.h"
 #include "scene.h"
 
-namespace LZ::Loader {
+namespace lzvk::loader {
 
     struct Mesh {
 

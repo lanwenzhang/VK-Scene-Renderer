@@ -5,40 +5,40 @@
 #include "../common.h"
 #include "../wrapper/instance.h"
 #include "../wrapper/device.h"
-#include "../wrapper/windowSurface.h"
-#include "../wrapper/swapChain.h"
+#include "../wrapper/Surface.h"
+#include "../wrapper/swap_chain.h"
 
 #include "../wrapper/shader.h"
 #include "../wrapper/pipeline.h"
-#include "../wrapper/renderPass.h"
-#include "../wrapper/commandPool.h"
-#include "../wrapper/commandBuffer.h"
+#include "../wrapper/render_pass.h"
+#include "../wrapper/command_pool.h"
+#include "../wrapper/command_buffer.h"
 #include "../wrapper/semaphore.h"
 #include "../wrapper/fence.h"
 #include "../wrapper/buffer.h"
-#include "../wrapper/descriptorSetLayout.h"
-#include "../wrapper/descriptorPool.h"
+#include "../wrapper/descriptor_set_layout.h"
+#include "../wrapper/descriptor_pool.h"
 #include "../wrapper/description.h"
-#include "../wrapper/descriptorSet.h"
+#include "../wrapper/descriptor_set.h"
 #include "../wrapper/image.h"
-#include "../wrapper/computePipeline.h"
-#include "../wrapper/computePassInstancing.h"
+#include "../wrapper/compute_pipeline.h"
+#include "../wrapper/compute_pass_instancing.h"
 
 #include "../loader/scene.h"
 #include "../loader/mesh.h"
 
-#include "../renderer/scene/sceneMeshRenderer.h"
-#include "../renderer/uniform/frameUniformManager.h"
-#include "../renderer/uniform/transformUniformManager.h"
-#include "../renderer/uniform/materialUniformManager.h"
-#include "../renderer/uniform/skyboxUniformManager.h"
-#include "../renderer/uniform/sceneTextureManager.h"
-#include "../renderer/uniform/drawDataUniformManager.h"
+#include "../renderer/scene/scene_mesh_renderer.h"
+#include "../renderer/uniform/frame_uniform_manager.h"
+#include "../renderer/uniform/transform_uniform_manager.h"
+#include "../renderer/uniform/material_uniform_manager.h"
+#include "../renderer/uniform/skybox_uniform_manager.h"
+#include "../renderer/uniform/scene_texture_manager.h"
+#include "../renderer/uniform/draw_data_uniform_manager.h"
 #include "../renderer/texture/texture.h"
-#include "../renderer/texture/cubemapTexture.h"
+#include "../renderer/texture/cube_map_texture.h"
 #include "../renderer/camera/camera.h"
 
-namespace LZ::Core{
+namespace lzvk::core{
 
 	class Application :public std::enable_shared_from_this<Application> {
 	public:
@@ -66,7 +66,7 @@ namespace LZ::Core{
 
 		void createRenderPass();
 		void createDescriptorSets();
-		void applyCommonPipelineState(const Wrapper::Pipeline::Ptr& pipeline, bool enableDepthWrite, VkCullModeFlagBits cullMode, bool isSceneGraph);
+		void applyCommonPipelineState(const lzvk::wrapper::Pipeline::Ptr& pipeline, bool enableDepthWrite, VkCullModeFlagBits cullMode, bool isSceneGraph);
 		void createSkyboxPipeline();
 		void createSceneGraphPipeline();
 		void createCommandBuffers();
@@ -81,48 +81,48 @@ namespace LZ::Core{
 		int mCurrentFrame{ 0 };
 		const int MAX_FRAMES_IN_FLIGHT{ 2 };
 
-		LZ::Core::Window::Ptr mWindow{ nullptr };
-		LZ::Wrapper::Instance::Ptr mInstance{ nullptr };
-		LZ::Wrapper::Device::Ptr mDevice{ nullptr };
-		LZ::Wrapper::WindowSurface::Ptr mSurface{ nullptr };
-		LZ::Wrapper::CommandPool::Ptr mCommandPool{ nullptr };
-		LZ::Wrapper::SwapChain::Ptr mSwapChain{ nullptr };
+		lzvk::core::Window::Ptr mWindow{ nullptr };
+		lzvk::wrapper::Instance::Ptr mInstance{ nullptr };
+		lzvk::wrapper::Device::Ptr mDevice{ nullptr };
+		lzvk::wrapper::Surface::Ptr mSurface{ nullptr };
+		lzvk::wrapper::CommandPool::Ptr mCommandPool{ nullptr };
+		lzvk::wrapper::SwapChain::Ptr mSwapChain{ nullptr };
 
-		LZ::Wrapper::RenderPass::Ptr mRenderPass{ nullptr };
-		LZ::Wrapper::Pipeline::Ptr mSkyboxPipeline{ nullptr };
-		LZ::Wrapper::Pipeline::Ptr mSceneGraphPipeline{ nullptr };
+		lzvk::wrapper::RenderPass::Ptr mRenderPass{ nullptr };
+		lzvk::wrapper::Pipeline::Ptr mSkyboxPipeline{ nullptr };
+		lzvk::wrapper::Pipeline::Ptr mSceneGraphPipeline{ nullptr };
 
-		std::vector<LZ::Wrapper::CommandBuffer::Ptr> mCommandBuffers{};
-		std::vector<LZ::Wrapper::Semaphore::Ptr> mImageAvailableSemaphores{};
-		std::vector<LZ::Wrapper::Semaphore::Ptr> mRenderFinishedSemaphores{};
-		std::vector<LZ::Wrapper::Fence::Ptr> mInFlightFences{};
+		std::vector<lzvk::wrapper::CommandBuffer::Ptr> mCommandBuffers{};
+		std::vector<lzvk::wrapper::Semaphore::Ptr> mImageAvailableSemaphores{};
+		std::vector<lzvk::wrapper::Semaphore::Ptr> mRenderFinishedSemaphores{};
+		std::vector<lzvk::wrapper::Fence::Ptr> mInFlightFences{};
 		
-		LZ::Renderer::SceneMeshRenderer::Ptr mSceneMesh{ nullptr };
-		LZ::Renderer::FrameUniformManager::Ptr mFrameUniformManager{ nullptr };
-		LZ::Renderer::TransformUniformManager::Ptr mTransformUniformManager{ nullptr };
-		LZ::Renderer::MaterialUniformManager::Ptr mMaterialUniformManager{ nullptr };
-		LZ::Renderer::SkyboxUniformManager::Ptr mSkyboxUniformManager{ nullptr };
-		LZ::Renderer::DrawDataUniformManager::Ptr mDrawDataUniformManager{ nullptr };
-		LZ::Renderer::SceneTextureManager::Ptr mSceneTextureManager{ nullptr };
+		lzvk::renderer::SceneMeshRenderer::Ptr mSceneMesh{ nullptr };
+		lzvk::renderer::FrameUniformManager::Ptr mFrameUniformManager{ nullptr };
+		lzvk::renderer::TransformUniformManager::Ptr mTransformUniformManager{ nullptr };
+		lzvk::renderer::MaterialUniformManager::Ptr mMaterialUniformManager{ nullptr };
+		lzvk::renderer::SkyboxUniformManager::Ptr mSkyboxUniformManager{ nullptr };
+		lzvk::renderer::DrawDataUniformManager::Ptr mDrawDataUniformManager{ nullptr };
+		lzvk::renderer::SceneTextureManager::Ptr mSceneTextureManager{ nullptr };
 
 		// Frame Uniform (per-frame)
-		LZ::Wrapper::DescriptorSetLayout::Ptr mDescriptorSetLayout_Frame{ nullptr };
-		LZ::Wrapper::DescriptorPool::Ptr      mDescriptorPool_Frame{ nullptr };
-		LZ::Wrapper::DescriptorSet::Ptr       mDescriptorSet_Frame{ nullptr };
+		lzvk::wrapper::DescriptorSetLayout::Ptr mDescriptorSetLayout_Frame{ nullptr };
+		lzvk::wrapper::DescriptorPool::Ptr      mDescriptorPool_Frame{ nullptr };
+		lzvk::wrapper::DescriptorSet::Ptr       mDescriptorSet_Frame{ nullptr };
 
 		// Static Uniforms (static resources)
-		LZ::Wrapper::DescriptorSetLayout::Ptr mDescriptorSetLayout_Static{ nullptr };
-		LZ::Wrapper::DescriptorPool::Ptr      mDescriptorPool_Static{ nullptr };
-		LZ::Wrapper::DescriptorSet::Ptr       mDescriptorSet_Static{ nullptr };
+		lzvk::wrapper::DescriptorSetLayout::Ptr mDescriptorSetLayout_Static{ nullptr };
+		lzvk::wrapper::DescriptorPool::Ptr      mDescriptorPool_Static{ nullptr };
+		lzvk::wrapper::DescriptorSet::Ptr       mDescriptorSet_Static{ nullptr };
 
 		// Static Uniforms (diffuse texture)
-		LZ::Wrapper::DescriptorSetLayout::Ptr mDescriptorSetLayout_Diffuse{ nullptr };
-		LZ::Wrapper::DescriptorPool::Ptr      mDescriptorPool_Diffuse{ nullptr };
-		LZ::Wrapper::DescriptorSet::Ptr       mDescriptorSet_Diffuse{ nullptr };
+		lzvk::wrapper::DescriptorSetLayout::Ptr mDescriptorSetLayout_Diffuse{ nullptr };
+		lzvk::wrapper::DescriptorPool::Ptr      mDescriptorPool_Diffuse{ nullptr };
+		lzvk::wrapper::DescriptorSet::Ptr       mDescriptorSet_Diffuse{ nullptr };
 
-		LZ::Loader::Scene    mScene;
-		LZ::Loader::MeshData mMeshData;
-		LZ::Renderer::Camera mCamera;
+		lzvk::loader::Scene    mScene;
+		lzvk::loader::MeshData mMeshData;
+		lzvk::renderer::Camera mCamera;
 		VPMatrices mVPMatrices;
 	};
 }

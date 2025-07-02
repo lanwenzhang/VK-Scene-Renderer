@@ -1,8 +1,8 @@
 #include "buffer.h"
-#include "commandBuffer.h"
-#include "commandPool.h"
+#include "command_buffer.h"
+#include "command_pool.h"
 
-namespace LZ::Wrapper {
+namespace lzvk::wrapper {
 
 	Buffer::Ptr Buffer::createVertexBuffer(const Device::Ptr& device, VkDeviceSize size, const void* pData) {
 		

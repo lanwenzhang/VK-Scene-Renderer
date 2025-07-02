@@ -2,7 +2,7 @@
 #include <glm/glm.hpp>
 #include <vector>
 
-namespace LZ::Core {
+namespace lzvk::core {
 
 	struct VPMatrices {
 		glm::mat4 mViewMatrix;

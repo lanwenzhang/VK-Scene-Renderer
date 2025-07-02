@@ -1,7 +1,7 @@
 #pragma once
 #include "../../common.h"
 #include "../../core/type.h"
-namespace LZ::Renderer {
+namespace lzvk::renderer {
 
 
 	class Camera {
@@ -25,7 +25,7 @@ namespace LZ::Renderer {
 		glm::mat4 getViewProjectionMatrix();
 
 
-		void move(LZ::Core::CAMERA_MOVE mode);
+		void move(lzvk::core::CAMERA_MOVE mode);
 
 		void pitch(float yOffset);
 		void yaw(float xOffset);

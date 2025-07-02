@@ -1,6 +1,6 @@
 #include "Instance.h"
 
-namespace LZ::Wrapper {
+namespace lzvk::wrapper {
 
 	// Validation layer callback function
 	static VKAPI_ATTR VkBool32 VKAPI_CALL debugCallBack( 

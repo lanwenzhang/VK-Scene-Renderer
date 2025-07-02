@@ -3,7 +3,7 @@
 #include "../common.h"
 #include "device.h"
 
-namespace LZ::Wrapper {
+namespace lzvk::wrapper {
 
 	class Sampler {
 	public:

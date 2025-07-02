@@ -3,8 +3,8 @@ cmake_minimum_required(VERSION 3.12)
 project(Vulkan)
 set(CMAKE_CXX_STANDARD 17)
 
-# 2 Copy assets
-file(GLOB copyResources "./assets" "./thirdParty/assimp/bin/assimp-vc143-mtd.dll")
+# 2 Copy assets .spv .dll
+file(GLOB copyResources "./assets" "./renderer/shaders" "./thirdParty/assimp/bin/assimp-vc143-mtd.dll")
 file(COPY ${copyResources} DESTINATION ${CMAKE_BINARY_DIR})
 
 # 3 Third party

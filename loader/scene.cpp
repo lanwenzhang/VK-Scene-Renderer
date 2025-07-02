@@ -1,7 +1,7 @@
 #include "scene.h"
 
 
-namespace LZ::Loader {
+namespace lzvk::loader {
 
 	int addNode(Scene& scene, int parent, int level) {
 

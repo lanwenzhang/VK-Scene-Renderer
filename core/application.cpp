@@ -1,7 +1,6 @@
 ﻿#include "application.h"
 
-
-namespace LZ::Core {
+namespace lzvk::core {
 
 	void Application::run() {
 
@@ -42,29 +41,29 @@ namespace LZ::Core {
 	void Application::initVulkan() {
 
 		// 1 Set up environment
-		mInstance = LZ::Wrapper::Instance::create(true);
-		mSurface = Wrapper::WindowSurface::create(mInstance, mWindow);
-		mDevice = Wrapper::Device::create(mInstance, mSurface);
-		mCommandPool = Wrapper::CommandPool::create(mDevice);
+		mInstance = lzvk::wrapper::Instance::create(true);
+		mSurface = lzvk::wrapper::Surface::create(mInstance, mWindow);
+		mDevice = lzvk::wrapper::Device::create(mInstance, mSurface);
+		mCommandPool = lzvk::wrapper::CommandPool::create(mDevice);
 
-		mSwapChain = Wrapper::SwapChain::create(mDevice, mWindow, mSurface, mCommandPool);
+		mSwapChain = lzvk::wrapper::SwapChain::create(mDevice, mWindow, mSurface, mCommandPool);
 		mWidth = mSwapChain->getExtent().width;
 		mHeight = mSwapChain->getExtent().height;
 
 		// 2 Set up pipeline
-		mRenderPass = Wrapper::RenderPass::create(mDevice);
+		mRenderPass = lzvk::wrapper::RenderPass::create(mDevice);
 		createRenderPass();
 		mSwapChain->createFrameBuffers(mRenderPass);
 		
 		loadMeshFile("assets/crytek_sponza/sponza.obj", mMeshData, mScene);
-		mSceneMesh = LZ::Renderer::SceneMeshRenderer::create(mDevice, mCommandPool, mMeshData, mScene);
+		mSceneMesh = lzvk::renderer::SceneMeshRenderer::create(mDevice, mCommandPool, mMeshData, mScene);
 
 		createDescriptorSets();
 
-		mSkyboxPipeline = Wrapper::Pipeline::create(mDevice, mRenderPass);
+		mSkyboxPipeline = lzvk::wrapper::Pipeline::create(mDevice, mRenderPass);
 		createSkyboxPipeline();
 
-		mSceneGraphPipeline = Wrapper::Pipeline::create(mDevice, mRenderPass);
+		mSceneGraphPipeline = lzvk::wrapper::Pipeline::create(mDevice, mRenderPass);
 		createSceneGraphPipeline();
 
 		createCommandBuffers();
@@ -75,37 +74,37 @@ namespace LZ::Core {
 	void Application::createDescriptorSets()
 	{
 		// ----------- Frame Uniform -----------
-		mFrameUniformManager = LZ::Renderer::FrameUniformManager::create();
+		mFrameUniformManager = lzvk::renderer::FrameUniformManager::create();
 		mFrameUniformManager->init(mDevice, MAX_FRAMES_IN_FLIGHT);
 
-		std::vector<LZ::Wrapper::UniformParameter::Ptr> frameParams =
+		std::vector<lzvk::wrapper::UniformParameter::Ptr> frameParams =
 			mFrameUniformManager->getParams();
 
-		mDescriptorSetLayout_Frame = LZ::Wrapper::DescriptorSetLayout::create(mDevice);
+		mDescriptorSetLayout_Frame = lzvk::wrapper::DescriptorSetLayout::create(mDevice);
 		mDescriptorSetLayout_Frame->build(frameParams);
 
-		mDescriptorPool_Frame = LZ::Wrapper::DescriptorPool::create(mDevice);
+		mDescriptorPool_Frame = lzvk::wrapper::DescriptorPool::create(mDevice);
 		mDescriptorPool_Frame->build(frameParams, MAX_FRAMES_IN_FLIGHT);
 
-		mDescriptorSet_Frame = LZ::Wrapper::DescriptorSet::create(mDevice, frameParams, mDescriptorSetLayout_Frame, mDescriptorPool_Frame, MAX_FRAMES_IN_FLIGHT);
+		mDescriptorSet_Frame = lzvk::wrapper::DescriptorSet::create(mDevice, frameParams, mDescriptorSetLayout_Frame, mDescriptorPool_Frame, MAX_FRAMES_IN_FLIGHT);
 
 		// ----------- Static Uniforms -----------
-		mTransformUniformManager = LZ::Renderer::TransformUniformManager::create();
+		mTransformUniformManager = lzvk::renderer::TransformUniformManager::create();
 		mTransformUniformManager->init(mDevice, mScene.globalTransform.size(), mScene.globalTransform.empty() ? nullptr : mScene.globalTransform.data(), MAX_FRAMES_IN_FLIGHT);
 
-		mMaterialUniformManager = LZ::Renderer::MaterialUniformManager::create();
+		mMaterialUniformManager = lzvk::renderer::MaterialUniformManager::create();
 		mMaterialUniformManager->init(mDevice, mMeshData.materials.size(), mMeshData.materials.empty() ? nullptr : mMeshData.materials.data(), MAX_FRAMES_IN_FLIGHT);
 
-		mSkyboxUniformManager = LZ::Renderer::SkyboxUniformManager::create();
+		mSkyboxUniformManager = lzvk::renderer::SkyboxUniformManager::create();
 		mSkyboxUniformManager->init(mDevice, mCommandPool, "assets/piazza_bologni_1k.hdr");
 
-		mDrawDataUniformManager = LZ::Renderer::DrawDataUniformManager::create();
+		mDrawDataUniformManager = lzvk::renderer::DrawDataUniformManager::create();
 		mDrawDataUniformManager->init(mDevice, mScene.drawDataArray.size(), mScene.drawDataArray.data(), MAX_FRAMES_IN_FLIGHT);
 
 
-		std::vector<LZ::Wrapper::UniformParameter::Ptr> staticParams;
+		std::vector<lzvk::wrapper::UniformParameter::Ptr> staticParams;
 
-		auto append = [&](const std::vector<LZ::Wrapper::UniformParameter::Ptr>& params) {
+		auto append = [&](const std::vector<lzvk::wrapper::UniformParameter::Ptr>& params) {
 			staticParams.insert(staticParams.end(), params.begin(), params.end());
 			};
 
@@ -121,13 +120,13 @@ namespace LZ::Core {
 				<< ", DescriptorType = " << p->mDescriptorType << std::endl;
 		}
 
-		mDescriptorSetLayout_Static = Wrapper::DescriptorSetLayout::create(mDevice);
+		mDescriptorSetLayout_Static = lzvk::wrapper::DescriptorSetLayout::create(mDevice);
 		mDescriptorSetLayout_Static->build(staticParams);
 
-		mDescriptorPool_Static = Wrapper::DescriptorPool::create(mDevice);
+		mDescriptorPool_Static = lzvk::wrapper::DescriptorPool::create(mDevice);
 		mDescriptorPool_Static->build(staticParams, 1);
 
-		mDescriptorSet_Static = Wrapper::DescriptorSet::create(
+		mDescriptorSet_Static = lzvk::wrapper::DescriptorSet::create(
 			mDevice, staticParams,
 			mDescriptorSetLayout_Static,
 			mDescriptorPool_Static,
@@ -135,17 +134,17 @@ namespace LZ::Core {
 		);
 
 		// ------ TEXTURE DESCRIPTOR SETS ------
-		mSceneTextureManager = LZ::Renderer::SceneTextureManager::create();
+		mSceneTextureManager = lzvk::renderer::SceneTextureManager::create();
 		mSceneTextureManager->init(mDevice, mCommandPool, mSceneMesh, MAX_FRAMES_IN_FLIGHT);
 
 		auto diffuseParams = mSceneTextureManager->getDiffuseParams();
-		mDescriptorSetLayout_Diffuse = Wrapper::DescriptorSetLayout::create(mDevice);
+		mDescriptorSetLayout_Diffuse = lzvk::wrapper::DescriptorSetLayout::create(mDevice);
 		mDescriptorSetLayout_Diffuse->build(diffuseParams);
 
-		mDescriptorPool_Diffuse = Wrapper::DescriptorPool::create(mDevice);
+		mDescriptorPool_Diffuse = lzvk::wrapper::DescriptorPool::create(mDevice);
 		mDescriptorPool_Diffuse->build(diffuseParams, 1);
 
-		mDescriptorSet_Diffuse = Wrapper::DescriptorSet::create(
+		mDescriptorSet_Diffuse = lzvk::wrapper::DescriptorSet::create(
 			mDevice, diffuseParams,
 			mDescriptorSetLayout_Diffuse,
 			mDescriptorPool_Diffuse,
@@ -181,18 +180,18 @@ namespace LZ::Core {
 		);*/
 
 
-		mDescriptorSetLayout_Static = Wrapper::DescriptorSetLayout::create(mDevice);
+		mDescriptorSetLayout_Static = lzvk::wrapper::DescriptorSetLayout::create(mDevice);
 
 		mDescriptorSetLayout_Static->build(staticParams);
 
-		mDescriptorPool_Static = Wrapper::DescriptorPool::create(mDevice);
+		mDescriptorPool_Static = lzvk::wrapper::DescriptorPool::create(mDevice);
 
 		mDescriptorPool_Static->build(staticParams, 1);
 
-		mDescriptorSet_Static = Wrapper::DescriptorSet::create(mDevice, staticParams, mDescriptorSetLayout_Static, mDescriptorPool_Static, 1);
+		mDescriptorSet_Static = lzvk::wrapper::DescriptorSet::create(mDevice, staticParams, mDescriptorSetLayout_Static, mDescriptorPool_Static, 1);
 	}
 
-	void Application::applyCommonPipelineState(const Wrapper::Pipeline::Ptr& pipeline, bool enableDepthWrite, VkCullModeFlagBits cullMode, bool isSceneGraph) {
+	void Application::applyCommonPipelineState(const lzvk::wrapper::Pipeline::Ptr& pipeline, bool enableDepthWrite, VkCullModeFlagBits cullMode, bool isSceneGraph) {
 		
 		// Dynamic state
 		std::vector<VkDynamicState> dynamicStates = {
@@ -273,9 +272,9 @@ namespace LZ::Core {
 	void Application::createSkyboxPipeline() {
 
 		// Shaders
-		std::vector<Wrapper::Shader::Ptr> shaderGroup{};
-		shaderGroup.push_back(Wrapper::Shader::create(mDevice, "shaders/cubemapvs.spv", VK_SHADER_STAGE_VERTEX_BIT, "main"));
-		shaderGroup.push_back(Wrapper::Shader::create(mDevice, "shaders/cubemapfs.spv", VK_SHADER_STAGE_FRAGMENT_BIT, "main"));
+		std::vector<lzvk::wrapper::Shader::Ptr> shaderGroup{};
+		shaderGroup.push_back(lzvk::wrapper::Shader::create(mDevice, "shaders/cubemap/cubemapvs.spv", VK_SHADER_STAGE_VERTEX_BIT, "main"));
+		shaderGroup.push_back(lzvk::wrapper::Shader::create(mDevice, "shaders/cubemap/cubemapfs.spv", VK_SHADER_STAGE_FRAGMENT_BIT, "main"));
 		mSkyboxPipeline->setShaderGroup(shaderGroup);
 
 		// No vertex buffer
@@ -298,9 +297,9 @@ namespace LZ::Core {
 
 	void Application::createSceneGraphPipeline() {
 
-		std::vector<Wrapper::Shader::Ptr> shaderGroup{};
-		shaderGroup.push_back(Wrapper::Shader::create(mDevice, "shaders/sceneGraphvs.spv", VK_SHADER_STAGE_VERTEX_BIT, "main"));
-		shaderGroup.push_back(Wrapper::Shader::create(mDevice, "shaders/sceneGraphfs.spv", VK_SHADER_STAGE_FRAGMENT_BIT, "main"));
+		std::vector<lzvk::wrapper::Shader::Ptr> shaderGroup{};
+		shaderGroup.push_back(lzvk::wrapper::Shader::create(mDevice, "shaders/sceneGraph/sceneGraphvs.spv", VK_SHADER_STAGE_VERTEX_BIT, "main"));
+		shaderGroup.push_back(lzvk::wrapper::Shader::create(mDevice, "shaders/sceneGraph/sceneGraphfs.spv", VK_SHADER_STAGE_FRAGMENT_BIT, "main"));
 		mSceneGraphPipeline->setShaderGroup(shaderGroup);
 
 		// Vertex input
@@ -350,7 +349,7 @@ namespace LZ::Core {
 
 		// 1.3 Depth attachment
 		VkAttachmentDescription depthAttachmentDes{};
-		depthAttachmentDes.format = Wrapper::Image::findDepthFormat(mDevice);
+		depthAttachmentDes.format = lzvk::wrapper::Image::findDepthFormat(mDevice);
 		depthAttachmentDes.samples = mDevice->getMaxUsableSampleCount();
 		depthAttachmentDes.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
 		depthAttachmentDes.storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
@@ -375,7 +374,7 @@ namespace LZ::Core {
 		depthAttachmentRef.layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
 
 		// 3 Subpass 
-		Wrapper::SubPass subPass{};
+		lzvk::wrapper::SubPass subPass{};
 		subPass.addColorAttachmentReference(mutiAttachmentRef);
 		subPass.setDepthStencilAttachmentReference(depthAttachmentRef);
 		subPass.setResolveAttachmentReference(finalAttachmentRef);
@@ -407,7 +406,7 @@ namespace LZ::Core {
 
 		for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i) {
 
-			mCommandBuffers[i] = Wrapper::CommandBuffer::create(mDevice, mCommandPool);
+			mCommandBuffers[i] = lzvk::wrapper::CommandBuffer::create(mDevice, mCommandPool);
 
 		}
 	}
@@ -470,14 +469,19 @@ namespace LZ::Core {
 	void Application::createSyncObjects() {
 
 		mImageAvailableSemaphores.resize(MAX_FRAMES_IN_FLIGHT);
-		mRenderFinishedSemaphores.resize(MAX_FRAMES_IN_FLIGHT);
+		mRenderFinishedSemaphores.resize(mSwapChain->getImageCount());
 		mInFlightFences.resize(MAX_FRAMES_IN_FLIGHT);
 
 		for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i) {
-			mImageAvailableSemaphores[i] = Wrapper::Semaphore::create(mDevice);
-			mRenderFinishedSemaphores[i] = Wrapper::Semaphore::create(mDevice);
-			mInFlightFences[i] = Wrapper::Fence::create(mDevice);
+			mImageAvailableSemaphores[i] = lzvk::wrapper::Semaphore::create(mDevice);
+			mInFlightFences[i] = lzvk::wrapper::Fence::create(mDevice);
 		}
+
+		for (int i = 0; i < mSwapChain->getImageCount(); ++i) {
+
+			mRenderFinishedSemaphores[i] = lzvk::wrapper::Semaphore::create(mDevice);
+		}
+
 	}
 
 	void Application::recreateSwapChain() {
@@ -499,7 +503,7 @@ namespace LZ::Core {
 		cleanupSwapChain();
 
 		// Swap chain
-		mSwapChain = Wrapper::SwapChain::create(mDevice, mWindow, mSurface, mCommandPool);
+		mSwapChain = lzvk::wrapper::SwapChain::create(mDevice, mWindow, mSurface, mCommandPool);
 		mWidth = mSwapChain->getExtent().width;
 		mHeight = mSwapChain->getExtent().height;
 
@@ -528,14 +532,7 @@ namespace LZ::Core {
 	void Application::cleanupSwapChain() {
 		
 		mSwapChain.reset();
-		//mCommandBuffers.clear();
-		//mSkyboxPipeline.reset();
-		//mSceneGraphPipeline.reset();
-		//mRenderPass.reset();
-
-		//mImageAvailableSemaphores.clear();
-		//mRenderFinishedSemaphores.clear();
-		//mInFlightFences.clear();
+	
 	}
 
 	void Application::mainLoop() {
@@ -598,7 +595,7 @@ namespace LZ::Core {
 		submitInfo.pCommandBuffers = &commandBuffer;
 
 		// 2.3 Signal semaphore
-		VkSemaphore signalSemaphores[] = { mRenderFinishedSemaphores[mCurrentFrame]->getSemaphore() };
+		VkSemaphore signalSemaphores[] = { mRenderFinishedSemaphores[imageIndex]->getSemaphore() };
 		submitInfo.signalSemaphoreCount = 1;
 		submitInfo.pSignalSemaphores = signalSemaphores;
 

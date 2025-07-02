@@ -1,8 +1,8 @@
 #include "image.h"
-#include "commandBuffer.h"
+#include "command_buffer.h"
 #include "buffer.h"
 
-namespace LZ::Wrapper {
+namespace lzvk::wrapper {
 
 	Image::Ptr Image::createDepthImage(const Device::Ptr& device, const int& width, const int& height, VkSampleCountFlagBits sample) {
 

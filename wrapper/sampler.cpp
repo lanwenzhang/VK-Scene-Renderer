@@ -1,6 +1,6 @@
 #include "sampler.h"
 
-namespace LZ::Wrapper {
+namespace lzvk::wrapper {
 
 	Sampler::Sampler(const Device::Ptr& device) {
 		

@@ -2,7 +2,7 @@
 
 #include "../common.h"
 
-namespace LZ::Core {
+namespace lzvk::core {
 	
 	class Application;
 	

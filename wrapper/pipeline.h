@@ -3,10 +3,10 @@
 #include "../common.h"
 #include "device.h"
 #include "shader.h"
-#include "renderpass.h"
-#include "vulkanConfig.h"
+#include "render_pass.h"
+#include "vulkan_config.h"
 
-namespace LZ::Wrapper {
+namespace lzvk::wrapper {
 
 	class Pipeline {
 	public:

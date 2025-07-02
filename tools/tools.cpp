@@ -1,6 +1,6 @@
 #include "tools.h"
 
-namespace LZ::Tools {
+namespace lzvk::tools {
 
     glm::vec3 Tools::faceCoordsToXYZ(int i, int j, int faceID, int faceSize) {
         float u = (2.0f * (i + 0.5f) / faceSize) - 1.0f;

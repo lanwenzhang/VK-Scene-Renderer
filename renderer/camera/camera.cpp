@@ -1,6 +1,6 @@
 #include "camera.h"
 
-namespace LZ::Renderer {
+namespace lzvk::renderer {
 
 	Camera::Camera()
 	{
@@ -70,21 +70,21 @@ namespace LZ::Renderer {
 
 	}
 
-	void Camera::move(LZ::Core::CAMERA_MOVE mode)
+	void Camera::move(lzvk::core::CAMERA_MOVE mode)
 	{
 		switch (mode)
 		{
-		case LZ::Core::CAMERA_MOVE::MOVE_LEFT:
+		case lzvk::core::CAMERA_MOVE::MOVE_LEFT:
 			mPosition -= glm::normalize(glm::cross(mFront, mUp)) * mSpeed;
 			break;
-		case LZ::Core::CAMERA_MOVE::MOVE_RIGHT:
+		case lzvk::core::CAMERA_MOVE::MOVE_RIGHT:
 			mPosition += glm::normalize(
 				glm::cross(mFront, mUp)) * mSpeed;
 			break;
-		case LZ::Core::CAMERA_MOVE::MOVE_FRONT:
+		case lzvk::core::CAMERA_MOVE::MOVE_FRONT:
 			mPosition += mSpeed * mFront;
 			break;
-		case LZ::Core::CAMERA_MOVE::MOVE_BACK:
+		case lzvk::core::CAMERA_MOVE::MOVE_BACK:
 			mPosition -= mSpeed * mFront;
 			break;
 		default:

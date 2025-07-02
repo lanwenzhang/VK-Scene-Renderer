@@ -1,6 +1,6 @@
 #include "pipeline.h"
 
-namespace LZ::Wrapper {
+namespace lzvk::wrapper {
 
 	Pipeline::Pipeline(const Device::Ptr& device, const RenderPass::Ptr& renderPass){
 	

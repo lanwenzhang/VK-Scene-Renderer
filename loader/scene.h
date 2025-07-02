@@ -3,7 +3,7 @@
 #include "../common.h"
 #include <assimp/matrix4x4.h>
 
-namespace LZ::Loader {
+namespace lzvk::loader {
 
 	struct DrawData {
 		uint32_t transformId;

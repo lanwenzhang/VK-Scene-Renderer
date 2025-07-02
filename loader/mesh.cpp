@@ -4,7 +4,7 @@
 
 #include "mesh.h"
 
-namespace LZ::Loader {
+namespace lzvk::loader {
 
     static int addTextureIfUnique(
         std::vector<std::string>& textureFiles,

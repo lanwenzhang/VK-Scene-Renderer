@@ -1,6 +1,6 @@
 #include "fence.h"
 
-namespace LZ::Wrapper{
+namespace lzvk::wrapper{
 
 	Fence::Fence(const Device::Ptr& device, bool signaled) {
 

@@ -3,9 +3,9 @@
 #define STB_IMAGE_IMPLEMENTATION
 #include <stb_image.h>
 
-namespace LZ::Renderer {
+namespace lzvk::renderer {
 
-	Texture::Texture(const LZ::Wrapper::Device::Ptr& device, const LZ::Wrapper::CommandPool::Ptr& commandPool, const std::string& imageFilePath) {
+	Texture::Texture(const lzvk::wrapper::Device::Ptr& device, const lzvk::wrapper::CommandPool::Ptr& commandPool, const std::string& imageFilePath) {
 		
 		mDevice = device;
 
@@ -19,7 +19,7 @@ namespace LZ::Renderer {
 
 		texSize = texWidth * texHeight * 4;
 
-		mImage = LZ::Wrapper::Image::create(
+		mImage = lzvk::wrapper::Image::create(
 			mDevice, texWidth, texHeight,
 			VK_FORMAT_R8G8B8A8_SRGB,
 			VK_IMAGE_TYPE_2D,
@@ -60,7 +60,7 @@ namespace LZ::Renderer {
 		stbi_image_free(pixels);
 
 		// create sampler
-		mSampler = LZ::Wrapper::Sampler::create(mDevice);
+		mSampler = lzvk::wrapper::Sampler::create(mDevice);
 
 		mImageInfo.imageLayout = mImage->getLayout();
 		mImageInfo.imageView = mImage->getImageView();

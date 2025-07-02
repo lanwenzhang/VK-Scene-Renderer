@@ -2,9 +2,9 @@
 
 #include "../common.h"
 #include "device.h"
-#include "commandPool.h"
+#include "command_pool.h"
 
-namespace LZ::Wrapper {
+namespace lzvk::wrapper {
 
 	class Image {
 	public:

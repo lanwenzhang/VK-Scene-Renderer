@@ -1,7 +1,7 @@
 #include "window.h"
 #include "application.h"
 
-namespace LZ::Core {
+namespace lzvk::core {
 
 	static void windowResized(GLFWwindow* window, int width, int height) {
 

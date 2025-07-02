@@ -1,6 +1,6 @@
 #include "bitmap.h"
 
-namespace LZ::Tools {
+namespace lzvk::tools {
 
 	class Tools {
 	public:

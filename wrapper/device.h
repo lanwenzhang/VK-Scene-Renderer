@@ -2,19 +2,19 @@
 
 #include "../common.h"
 #include "instance.h"
-#include "windowSurface.h"
-#include "vulkanConfig.h"
+#include "Surface.h"
+#include "vulkan_config.h"
 
 
-namespace LZ::Wrapper {
+namespace lzvk::wrapper {
 
 	class Device {
 	public:
 
 		using Ptr = std::shared_ptr<Device>;
-		static Ptr create(Instance::Ptr instance, WindowSurface::Ptr surface) { return std::make_shared<Device>(instance, surface); }
+		static Ptr create(Instance::Ptr instance, Surface::Ptr surface) { return std::make_shared<Device>(instance, surface); }
 
-		Device(Instance::Ptr instance, WindowSurface::Ptr surface);
+		Device(Instance::Ptr instance, Surface::Ptr surface);
 		~Device();
 
 		// 1 Create Physical device and logical device
@@ -47,7 +47,7 @@ namespace LZ::Wrapper {
 	private:
 
 		Instance::Ptr mInstance{ nullptr };
-		WindowSurface::Ptr mSurface{ nullptr };
+		Surface::Ptr mSurface{ nullptr };
 		VkPhysicalDevice mPhysicalDevice{ VK_NULL_HANDLE };
 		VkDevice mDevice{ VK_NULL_HANDLE };
 

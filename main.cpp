@@ -3,7 +3,7 @@
 
 int main(){
 
-    std::shared_ptr<LZ::Core::Application> app = std::make_shared<LZ::Core::Application>();
+    std::shared_ptr<lzvk::core::Application> app = std::make_shared<lzvk::core::Application>();
 
     try {
 

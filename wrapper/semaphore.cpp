@@ -1,6 +1,6 @@
 #include "semaphore.h"
 
-namespace LZ::Wrapper {
+namespace lzvk::wrapper {
 
 	Semaphore::Semaphore(const Device::Ptr& device) {
 

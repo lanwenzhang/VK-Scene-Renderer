@@ -1,6 +1,6 @@
 #include "shader.h"
 
-namespace LZ::Wrapper {
+namespace lzvk::wrapper {
 
 	static std::vector<char> readBinary(const std::string& fileName) {
 

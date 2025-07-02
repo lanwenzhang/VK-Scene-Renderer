@@ -1,8 +1,8 @@
 #include "device.h"
 
-namespace LZ::Wrapper {
+namespace lzvk::wrapper {
 
-	Device::Device(Instance::Ptr instance, WindowSurface::Ptr surface) {
+	Device::Device(Instance::Ptr instance, Surface::Ptr surface) {
 
 		mInstance = instance;
 		mSurface = surface;

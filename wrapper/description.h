@@ -2,9 +2,9 @@
 
 #include "buffer.h"
 #include "../renderer/texture/texture.h"
-#include "../renderer/texture/cubeMapTexture.h"
+#include "../renderer/texture/cube_map_texture.h"
 
-namespace LZ::Wrapper {
+namespace lzvk::wrapper {
 
 	struct UniformParameter {
 
@@ -19,9 +19,9 @@ namespace LZ::Wrapper {
 		VkShaderStageFlags      mStage;
 
 		std::vector<Buffer::Ptr> mBuffers{};
-		LZ::Renderer::Texture::Ptr mTexture{ nullptr };
-		LZ::Renderer::CubeMapTexture::Ptr mCubeMap{ nullptr };
-		std::vector<LZ::Renderer::Texture::Ptr> mTextures{};
+		lzvk::renderer::Texture::Ptr mTexture{ nullptr };
+		lzvk::renderer::CubeMapTexture::Ptr mCubeMap{ nullptr };
+		std::vector<lzvk::renderer::Texture::Ptr> mTextures{};
 
 		std::vector<VkDescriptorImageInfo> mImageInfos{};
 	};

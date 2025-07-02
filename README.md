@@ -1,6 +1,6 @@
 # LZ-Scene-Renderer
 
-A real-time Vulkan renderer supporting large-scale 3D scenes, with scene graph management, indirect rendering, and multi-texture mapping.
+A real-time Vulkan renderer supporting large-scale 3D scenes, with scene graph management, indirect rendering, and multi-texture mapping
 
 ## Screenshots
 ![LZ-Scene-Renderer](data/screenshot.gif)

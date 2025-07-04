@@ -3,7 +3,13 @@
 A real-time Vulkan renderer supporting large-scale 3D scenes, with scene graph management, indirect rendering, and multi-texture mapping
 
 ## Screenshots
-![LZ-Scene-Renderer](data/screenshot.gif)
+* Bistro
+  
+![LZ-Scene-Renderer](data/screenshot_01.gif)
+
+* Sponza
+
+![LZ-Scene-Renderer](data/screenshot_02.gif)
 
 ## Build
 

@@ -24,12 +24,12 @@ namespace lzvk::loader {
         float alphaTest = 0.0f;
         float transparencyFactor = 1.0f;
 
-        uint32_t baseColorTexture = -1;
-        uint32_t specularTexture = -1;
-        uint32_t emissiveTexture = -1;
-        uint32_t normalTexture = -1;
-        uint32_t opacityTexture = -1;
-        uint32_t occlusionTexture = -1;
+        uint32_t baseColorTexture = static_cast<uint32_t>(-1);
+        uint32_t specularTexture = static_cast<uint32_t>(-1);
+        uint32_t emissiveTexture = static_cast<uint32_t>(-1);
+        uint32_t normalTexture = static_cast<uint32_t>(-1);
+        uint32_t opacityTexture = static_cast<uint32_t>(-1);
+        uint32_t occlusionTexture = static_cast<uint32_t>(-1);
 
         std::string baseColorTexturePath;
         std::string specularTexturePath;
@@ -38,7 +38,9 @@ namespace lzvk::loader {
         std::string opacityTexturePath;
         std::string occlusionTexturePath;
     };
+
     struct MeshData {
+
         std::vector<uint32_t> indexData;
         std::vector<uint8_t> vertexData;
         std::vector<Mesh> meshes;
@@ -46,10 +48,12 @@ namespace lzvk::loader {
 
         std::vector<std::string> diffuseTextureFiles;
         std::vector<std::string> emissiveTextureFiles;
+        std::vector<std::string> normalTextureFiles;
         std::vector<std::string> occlusionTextureFiles;
     };
 
     bool loadMeshFile(const std::string& path, MeshData& meshData, Scene& scene);
-
+    bool loadMeshData(const std::string& path, MeshData& meshData);
+    void saveMeshData(const std::string& path, const MeshData& meshData);
 }
 

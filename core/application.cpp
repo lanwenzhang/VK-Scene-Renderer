@@ -1,4 +1,6 @@
 ﻿#include "application.h"
+#include "../tools/scene_tools.h"
+
 
 namespace lzvk::core {
 
@@ -34,7 +36,7 @@ namespace lzvk::core {
 		mCamera.lookAt(glm::vec3(0.0f, 10.0f, 3.0f), glm::vec3(0.0f, 0.0f, -10.0f), glm::vec3(0.0f, 1.0f, 0.0f));
 		mCamera.update();
 		mCamera.setPerpective(45.0f, (float)mWidth / (float)mHeight, 0.1f, 2000.0f);
-		mCamera.setSpeed(0.001f);
+		mCamera.setSpeed(0.01f);
 
 	}
 
@@ -55,8 +57,111 @@ namespace lzvk::core {
 		createRenderPass();
 		mSwapChain->createFrameBuffers(mRenderPass);
 		
-		loadMeshFile("assets/crytek_sponza/sponza.obj", mMeshData, mScene);
-		mSceneMesh = lzvk::renderer::SceneMeshRenderer::create(mDevice, mCommandPool, mMeshData, mScene);
+		const std::string exteriorMeshCache = "assets/.cache/exterior.meshes";
+		const std::string exteriorSceneCache = "assets/.cache/exterior.scene";
+		const std::string interiorMeshCache = "assets/.cache/interior.meshes";
+		const std::string interiorSceneCache = "assets/.cache/interior.scene";
+
+		const std::string sourceModelExterior = "assets/bistro/Exterior/exterior.obj";
+		const std::string sourceModelInterior = "assets/bistro/Interior/interior.obj";
+
+		// ---------- Load EXTERIOR ----------
+		bool exteriorCacheLoaded =
+			lzvk::loader::loadMeshData(exteriorMeshCache, mMeshDataExterior) &&
+			lzvk::loader::loadScene(exteriorSceneCache, mSceneExterior);
+
+		if (!exteriorCacheLoaded) {
+			printf("[Application] Cache not found for EXTERIOR. Loading from OBJ...\n");
+
+			bool loaded = lzvk::loader::loadMeshFile(sourceModelExterior, mMeshDataExterior, mSceneExterior);
+			if (!loaded) {
+				printf("[Application] Failed to load EXTERIOR mesh file!\n");
+				throw std::runtime_error("Failed to load EXTERIOR mesh file.");
+			}
+
+			// merge foliage
+			lzvk::tools::mergeNodesWithMaterial(mSceneExterior, mMeshDataExterior, "Foliage_Linde_Tree_Large_Orange_Leaves");
+			lzvk::tools::mergeNodesWithMaterial(mSceneExterior, mMeshDataExterior, "Foliage_Linde_Tree_Large_Green_Leaves");
+			lzvk::tools::mergeNodesWithMaterial(mSceneExterior, mMeshDataExterior, "Foliage_Linde_Tree_Large_Trunk");
+
+			// save cache
+			lzvk::loader::saveMeshData(exteriorMeshCache, mMeshDataExterior);
+			lzvk::loader::saveScene(exteriorSceneCache, mSceneExterior);
+
+			printf("[Application] EXTERIOR loaded and cached.\n");
+		}
+		else {
+			printf("[Application] Loaded EXTERIOR from cache.\n");
+		}
+
+		// ---------- Load INTERIOR ----------
+		bool interiorCacheLoaded =
+			lzvk::loader::loadMeshData(interiorMeshCache, mMeshDataInterior) &&
+			lzvk::loader::loadScene(interiorSceneCache, mSceneInterior);
+
+		if (!interiorCacheLoaded) {
+			printf("[Application] Cache not found for INTERIOR. Loading from OBJ...\n");
+
+			bool loaded = lzvk::loader::loadMeshFile(sourceModelInterior, mMeshDataInterior, mSceneInterior);
+			if (!loaded) {
+				printf("[Application] Failed to load INTERIOR mesh file!\n");
+				throw std::runtime_error("Failed to load INTERIOR mesh file.");
+			}
+
+			// save cache
+			lzvk::loader::saveMeshData(interiorMeshCache, mMeshDataInterior);
+			lzvk::loader::saveScene(interiorSceneCache, mSceneInterior);
+
+			printf("[Application] INTERIOR loaded and cached.\n");
+		}
+		else {
+			printf("[Application] Loaded INTERIOR from cache.\n");
+		}
+
+		printf("[Application] EXTERIOR meshes = %zu, draw data = %zu, hierarchy = %zu\n ",
+			mMeshDataExterior.meshes.size(), mSceneExterior.drawDataArray.size(), mSceneExterior.hierarchy.size());
+
+		printf("[Application] INTERIOR meshes = %zu, draw data = %zu, hierarchy = %zu\n ",
+			mMeshDataInterior.meshes.size(), mSceneInterior.drawDataArray.size(), mSceneInterior.hierarchy.size());
+
+		// ---------- Merge SCENES ----------
+		lzvk::tools::mergeScenes(
+			mScene,
+			{ &mSceneExterior, &mSceneInterior },
+			{},
+		{
+			static_cast<uint32_t>(mMeshDataExterior.meshes.size()),
+			static_cast<uint32_t>(mMeshDataInterior.meshes.size())
+		}
+		);
+
+		printf("[Application] Merged scene hierarchy = %zu\n", mScene.hierarchy.size());
+		printf("[Application] Merged scene drawData = %zu\n", mScene.drawDataArray.size());
+
+
+		// ---------- Debug: MeshData before merge ----------
+		printf("[Debug] Exterior: meshes = %zu, indices = %zu, vertexData = %zu bytes\n",
+			mMeshDataExterior.meshes.size(),
+			mMeshDataExterior.indexData.size(),
+			mMeshDataExterior.vertexData.size());
+
+		printf("[Debug] Interior: meshes = %zu, indices = %zu, vertexData = %zu bytes\n",
+			mMeshDataInterior.meshes.size(),
+			mMeshDataInterior.indexData.size(),
+			mMeshDataInterior.vertexData.size());
+
+		// ---------- Merge MESH DATA (test only) ----------
+		lzvk::tools::mergeMeshData(mMeshData, mMeshDataExterior, mMeshDataInterior);
+		lzvk::tools::mergeMaterialLists(mMeshData, { &mMeshDataExterior, &mMeshDataInterior });
+		mScene.localTransform[0] = glm::scale(glm::mat4(1.0f), glm::vec3(0.01f));
+		lzvk::loader::recalculateGlobalTransforms(mScene);
+
+		//mSceneInterior.localTransform[0] = glm::scale(glm::mat4(1.0f), glm::vec3(0.01f));
+		//lzvk::loader::recalculateGlobalTransforms(mSceneInterior);
+
+		/*mSceneMesh = lzvk::renderer::SceneMeshRenderer::create(mDevice, mCommandPool, mMeshDataExterior, mSceneExterior, MAX_FRAMES_IN_FLIGHT);*/
+		//mSceneMesh = lzvk::renderer::SceneMeshRenderer::create(mDevice, mCommandPool, mMeshDataInterior, mSceneInterior, MAX_FRAMES_IN_FLIGHT);
+		mSceneMesh = lzvk::renderer::SceneMeshRenderer::create(mDevice, mCommandPool, mMeshData, mScene, MAX_FRAMES_IN_FLIGHT);
 
 		createDescriptorSets();
 
@@ -73,7 +178,10 @@ namespace lzvk::core {
 
 	void Application::createDescriptorSets()
 	{
-		// ----------- Frame Uniform -----------
+		//
+		// ========== Frame Uniform ==========
+		//
+
 		mFrameUniformManager = lzvk::renderer::FrameUniformManager::create();
 		mFrameUniformManager->init(mDevice, MAX_FRAMES_IN_FLIGHT);
 
@@ -86,109 +194,36 @@ namespace lzvk::core {
 		mDescriptorPool_Frame = lzvk::wrapper::DescriptorPool::create(mDevice);
 		mDescriptorPool_Frame->build(frameParams, MAX_FRAMES_IN_FLIGHT);
 
-		mDescriptorSet_Frame = lzvk::wrapper::DescriptorSet::create(mDevice, frameParams, mDescriptorSetLayout_Frame, mDescriptorPool_Frame, MAX_FRAMES_IN_FLIGHT);
+		mDescriptorSet_Frame = lzvk::wrapper::DescriptorSet::create(
+			mDevice,
+			frameParams,
+			mDescriptorSetLayout_Frame,
+			mDescriptorPool_Frame,
+			MAX_FRAMES_IN_FLIGHT
+		);
 
-		// ----------- Static Uniforms -----------
-		mTransformUniformManager = lzvk::renderer::TransformUniformManager::create();
-		mTransformUniformManager->init(mDevice, mScene.globalTransform.size(), mScene.globalTransform.empty() ? nullptr : mScene.globalTransform.data(), MAX_FRAMES_IN_FLIGHT);
-
-		mMaterialUniformManager = lzvk::renderer::MaterialUniformManager::create();
-		mMaterialUniformManager->init(mDevice, mMeshData.materials.size(), mMeshData.materials.empty() ? nullptr : mMeshData.materials.data(), MAX_FRAMES_IN_FLIGHT);
+		//
+		// ========== Skybox Uniform ==========
+		//
 
 		mSkyboxUniformManager = lzvk::renderer::SkyboxUniformManager::create();
 		mSkyboxUniformManager->init(mDevice, mCommandPool, "assets/piazza_bologni_1k.hdr");
 
-		mDrawDataUniformManager = lzvk::renderer::DrawDataUniformManager::create();
-		mDrawDataUniformManager->init(mDevice, mScene.drawDataArray.size(), mScene.drawDataArray.data(), MAX_FRAMES_IN_FLIGHT);
+		auto skyboxParams = mSkyboxUniformManager->getParams();
 
+		mDescriptorSetLayout_Skybox = lzvk::wrapper::DescriptorSetLayout::create(mDevice);
+		mDescriptorSetLayout_Skybox->build(skyboxParams);
 
-		std::vector<lzvk::wrapper::UniformParameter::Ptr> staticParams;
+		mDescriptorPool_Skybox = lzvk::wrapper::DescriptorPool::create(mDevice);
+		mDescriptorPool_Skybox->build(skyboxParams, 1);
 
-		auto append = [&](const std::vector<lzvk::wrapper::UniformParameter::Ptr>& params) {
-			staticParams.insert(staticParams.end(), params.begin(), params.end());
-			};
-
-		append(mTransformUniformManager->getParams());
-		append(mMaterialUniformManager->getParams());
-		append(mSkyboxUniformManager->getParams());
-		append(mDrawDataUniformManager->getParams());
-
-
-		for (auto& p : staticParams) {
-			std::cout << "[DEBUG] Binding " << p->mBinding
-				<< ", Count = " << p->mCount
-				<< ", DescriptorType = " << p->mDescriptorType << std::endl;
-		}
-
-		mDescriptorSetLayout_Static = lzvk::wrapper::DescriptorSetLayout::create(mDevice);
-		mDescriptorSetLayout_Static->build(staticParams);
-
-		mDescriptorPool_Static = lzvk::wrapper::DescriptorPool::create(mDevice);
-		mDescriptorPool_Static->build(staticParams, 1);
-
-		mDescriptorSet_Static = lzvk::wrapper::DescriptorSet::create(
-			mDevice, staticParams,
-			mDescriptorSetLayout_Static,
-			mDescriptorPool_Static,
+		mDescriptorSet_Skybox = lzvk::wrapper::DescriptorSet::create(
+			mDevice,
+			skyboxParams,
+			mDescriptorSetLayout_Skybox,
+			mDescriptorPool_Skybox,
 			1
 		);
-
-		// ------ TEXTURE DESCRIPTOR SETS ------
-		mSceneTextureManager = lzvk::renderer::SceneTextureManager::create();
-		mSceneTextureManager->init(mDevice, mCommandPool, mSceneMesh, MAX_FRAMES_IN_FLIGHT);
-
-		auto diffuseParams = mSceneTextureManager->getDiffuseParams();
-		mDescriptorSetLayout_Diffuse = lzvk::wrapper::DescriptorSetLayout::create(mDevice);
-		mDescriptorSetLayout_Diffuse->build(diffuseParams);
-
-		mDescriptorPool_Diffuse = lzvk::wrapper::DescriptorPool::create(mDevice);
-		mDescriptorPool_Diffuse->build(diffuseParams, 1);
-
-		mDescriptorSet_Diffuse = lzvk::wrapper::DescriptorSet::create(
-			mDevice, diffuseParams,
-			mDescriptorSetLayout_Diffuse,
-			mDescriptorPool_Diffuse,
-			1);
-
-
-		/*auto emissiveParams = mSceneTextureManager->getEmissiveParams();
-		mDescriptorSetLayout_Emissive = Wrapper::DescriptorSetLayout::create(mDevice);
-		mDescriptorSetLayout_Emissive->build(emissiveParams);
-
-		mDescriptorPool_Emissive = Wrapper::DescriptorPool::create(mDevice);
-		mDescriptorPool_Emissive->build(emissiveParams, 1);
-
-		mDescriptorSet_Emissive = Wrapper::DescriptorSet::create(
-			mDevice, emissiveParams,
-			mDescriptorSetLayout_Emissive,
-			mDescriptorPool_Emissive,
-			1
-		);
-
-		auto occlusionParams = mSceneTextureManager->getOcclusionParams();
-		mDescriptorSetLayout_Occlusion = Wrapper::DescriptorSetLayout::create(mDevice);
-		mDescriptorSetLayout_Occlusion->build(occlusionParams);
-
-		mDescriptorPool_Occlusion = Wrapper::DescriptorPool::create(mDevice);
-		mDescriptorPool_Occlusion->build(occlusionParams, 1);
-
-		mDescriptorSet_Occlusion = Wrapper::DescriptorSet::create(
-			mDevice, occlusionParams,
-			mDescriptorSetLayout_Occlusion,
-			mDescriptorPool_Occlusion,
-			1
-		);*/
-
-
-		mDescriptorSetLayout_Static = lzvk::wrapper::DescriptorSetLayout::create(mDevice);
-
-		mDescriptorSetLayout_Static->build(staticParams);
-
-		mDescriptorPool_Static = lzvk::wrapper::DescriptorPool::create(mDevice);
-
-		mDescriptorPool_Static->build(staticParams, 1);
-
-		mDescriptorSet_Static = lzvk::wrapper::DescriptorSet::create(mDevice, staticParams, mDescriptorSetLayout_Static, mDescriptorPool_Static, 1);
 	}
 
 	void Application::applyCommonPipelineState(const lzvk::wrapper::Pipeline::Ptr& pipeline, bool enableDepthWrite, VkCullModeFlagBits cullMode, bool isSceneGraph) {
@@ -249,17 +284,18 @@ namespace lzvk::core {
 
 		if (isSceneGraph) {
 			pipeline->mSetLayoutsStorage = {
-				mDescriptorSetLayout_Frame->getLayout(),
-				mDescriptorSetLayout_Static->getLayout(),
-				mDescriptorSetLayout_Diffuse->getLayout(),
-				//mDescriptorSetLayout_Emissive->getLayout(),
-				//mDescriptorSetLayout_Occlusion->getLayout()
+
+				 mDescriptorSetLayout_Frame->getLayout(),
+				 mSceneMesh->getDescriptorSetLayout_Static()->getLayout(),
+				 mSceneMesh->getDescriptorSetLayout_Diffuse()->getLayout(),
+				 mSceneMesh->getDescriptorSetLayout_Emissive()->getLayout(),
+				 mSceneMesh->getDescriptorSetLayout_Normal()->getLayout()
 			};
 		}
 		else {
 			pipeline->mSetLayoutsStorage = {
 				mDescriptorSetLayout_Frame->getLayout(),
-				mDescriptorSetLayout_Static->getLayout()
+				mDescriptorSetLayout_Skybox->getLayout()
 			};
 		}
 
@@ -447,19 +483,19 @@ namespace lzvk::core {
 		scissor.extent = { mWidth, mHeight };
 		mCommandBuffers[mCurrentFrame]->setScissor(0, scissor);
 
-		// --- Skybox ---
+		// --- skybox ---
 		mCommandBuffers[mCurrentFrame]->bindGraphicPipeline(mSkyboxPipeline->getPipeline());
 		mCommandBuffers[mCurrentFrame]->bindDescriptorSet(mSkyboxPipeline->getLayout(), mDescriptorSet_Frame->getDescriptorSet(mCurrentFrame), 0);
-		mCommandBuffers[mCurrentFrame]->bindDescriptorSet(mSkyboxPipeline->getLayout(), mDescriptorSet_Static->getDescriptorSet(0), 1);
+		mCommandBuffers[mCurrentFrame]->bindDescriptorSet(mSkyboxPipeline->getLayout(), mDescriptorSet_Skybox->getDescriptorSet(0), 1);
 		mCommandBuffers[mCurrentFrame]->draw(36);
 
-		// --- Indirect Model ---
+		// --- large scene ---
 		mCommandBuffers[mCurrentFrame]->bindGraphicPipeline(mSceneGraphPipeline->getPipeline());
 		mCommandBuffers[mCurrentFrame]->bindDescriptorSet(mSceneGraphPipeline->getLayout(), mDescriptorSet_Frame->getDescriptorSet(mCurrentFrame),0);
-		mCommandBuffers[mCurrentFrame]->bindDescriptorSet(mSceneGraphPipeline->getLayout(), mDescriptorSet_Static->getDescriptorSet(0), 1);
-		mCommandBuffers[mCurrentFrame]->bindDescriptorSet(mSceneGraphPipeline->getLayout(), mDescriptorSet_Diffuse->getDescriptorSet(0), 2);
-		//mCommandBuffers[mCurrentFrame]->bindDescriptorSet(mSceneGraphPipeline->getLayout(), mDescriptorSet_Emissive->getDescriptorSet(0), 3);
-		//mCommandBuffers[mCurrentFrame]->bindDescriptorSet(mSceneGraphPipeline->getLayout(), mDescriptorSet_Occlusion->getDescriptorSet(0), 4);
+		mCommandBuffers[mCurrentFrame]->bindDescriptorSet(mSceneGraphPipeline->getLayout(), mSceneMesh->getDescriptorSet_Static()->getDescriptorSet(0), 1);
+		mCommandBuffers[mCurrentFrame]->bindDescriptorSet(mSceneGraphPipeline->getLayout(), mSceneMesh->getDescriptorSet_Diffuse()->getDescriptorSet(0), 2);
+		mCommandBuffers[mCurrentFrame]->bindDescriptorSet(mSceneGraphPipeline->getLayout(), mSceneMesh->getDescriptorSet_Emissive()->getDescriptorSet(0), 3);
+		mCommandBuffers[mCurrentFrame]->bindDescriptorSet(mSceneGraphPipeline->getLayout(), mSceneMesh->getDescriptorSet_Normal()->getDescriptorSet(0), 4);
 		mSceneMesh->draw(mCommandBuffers[mCurrentFrame]);
 		mCommandBuffers[mCurrentFrame]->endRenderPass();
 		mCommandBuffers[mCurrentFrame]->end();
@@ -569,7 +605,7 @@ namespace lzvk::core {
 		}
 
 		// 1.2 Update 
-		mCamera.updatePitch(0.001f);
+		//mCamera.updatePitch(0.001f);
 		mFrameUniformManager->update(mCamera.getViewMatrix(), mCamera.getProjectMatrix(), mDescriptorSet_Frame, mCurrentFrame);
 		mInFlightFences[mCurrentFrame]->resetFence();
 
@@ -641,17 +677,14 @@ namespace lzvk::core {
 		mDescriptorPool_Frame.reset();
 		mDescriptorSetLayout_Frame.reset();
 
-		mDescriptorSet_Static.reset();
-		mDescriptorPool_Static.reset();
-		mDescriptorSetLayout_Static.reset();
+		mDescriptorSet_Skybox.reset();
+		mDescriptorPool_Skybox.reset();
+		mDescriptorSetLayout_Skybox.reset();
 
 		// Uniform Managers
 		mFrameUniformManager.reset();
-		mTransformUniformManager.reset();
-		mMaterialUniformManager.reset();
 		mSkyboxUniformManager.reset();
-		mSceneTextureManager.reset();
-
+	
 		mSkyboxPipeline.reset();
 		mSceneGraphPipeline.reset();
 		mRenderPass.reset();

@@ -1,10 +1,11 @@
 #pragma once
 
 #include "../../common.h"
+#include "../../loader/mesh.h"
+#include "../texture/texture.h"
 #include "../../wrapper/device.h"
 #include "../../wrapper/buffer.h"
 #include "../../wrapper/description.h"
-#include "../scene/scene_mesh_renderer.h"
 
 namespace lzvk::renderer {
 
@@ -18,12 +19,17 @@ namespace lzvk::renderer {
 
         void init(const lzvk::wrapper::Device::Ptr& device,
             const lzvk::wrapper::CommandPool::Ptr& commandPool,
-            const SceneMeshRenderer::Ptr& sceneMesh,
+            const lzvk::loader::MeshData& meshData,
             int frameCount);
 
-        std::vector<lzvk::wrapper::UniformParameter::Ptr> getDiffuseParams() const;
-        std::vector<lzvk::wrapper::UniformParameter::Ptr> getEmissiveParams() const;
-        std::vector<lzvk::wrapper::UniformParameter::Ptr> getOcclusionParams() const;
+        lzvk::wrapper::UniformParameter::Ptr loadTextureParam(
+            const std::vector<lzvk::renderer::Texture::Ptr>& textures,
+            uint32_t binding,
+            uint32_t fixedSize);
+
+        [[nodiscard]] auto getDiffuseParams() const { return std::vector{ mSceneDiffuseTexturesParam }; }
+        [[nodiscard]] auto getEmissiveParams() const { return std::vector{ mSceneEmissiveTexturesParam }; }
+        [[nodiscard]] auto getNormalParams() const { return std::vector{ mSceneNormalTexturesParam }; }
 
     private:
 
@@ -32,6 +38,6 @@ namespace lzvk::renderer {
 
         lzvk::wrapper::UniformParameter::Ptr mSceneDiffuseTexturesParam;
         lzvk::wrapper::UniformParameter::Ptr mSceneEmissiveTexturesParam;
-        lzvk::wrapper::UniformParameter::Ptr mSceneOcclusionTexturesParam;
+        lzvk::wrapper::UniformParameter::Ptr mSceneNormalTexturesParam;
     };
 }

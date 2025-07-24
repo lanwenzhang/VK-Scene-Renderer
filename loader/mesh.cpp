@@ -1,7 +1,7 @@
-#include <assimp/Importer.hpp>
+#include <assimp/importer.hpp>
 #include <assimp/scene.h>
 #include <assimp/postprocess.h>
-
+#include <filesystem>
 #include "mesh.h"
 
 namespace lzvk::loader {
@@ -24,9 +24,20 @@ namespace lzvk::loader {
 
     bool loadMeshFile(const std::string& path, MeshData& meshData, Scene& scene) {
 
-        meshData.diffuseTextureFiles.push_back("dummy.png");
+        std::string dummyPath = "assets/bistro/dummy.png";
+
+        meshData.diffuseTextureFiles.push_back(dummyPath);
+        meshData.emissiveTextureFiles.push_back(dummyPath);
+        meshData.normalTextureFiles.push_back(dummyPath);
+
         std::unordered_map<std::string, int> diffuseTextureMap;
-        diffuseTextureMap["dummy.png"] = 0;
+        diffuseTextureMap[dummyPath] = 0;
+
+        std::unordered_map<std::string, int> emissiveTextureMap;
+        emissiveTextureMap[dummyPath] = 0;
+
+        std::unordered_map<std::string, int> normalTextureMap;
+        normalTextureMap[dummyPath] = 0;
 
         Assimp::Importer importer;
 
@@ -34,7 +45,8 @@ namespace lzvk::loader {
             path,
             aiProcess_Triangulate |
             aiProcess_FlipUVs |
-            aiProcess_JoinIdenticalVertices
+            aiProcess_JoinIdenticalVertices |
+            aiProcess_CalcTangentSpace
         );
 
         if (!aiScene || aiScene->mFlags & AI_SCENE_FLAGS_INCOMPLETE || !aiScene->mRootNode) {
@@ -73,7 +85,15 @@ namespace lzvk::loader {
 
             // ---------- diffuse ----------
             if (AI_SUCCESS == aiMat->GetTexture(aiTextureType_DIFFUSE, 0, &str)) {
-                std::string uri = str.C_Str();
+                std::string rawPath = str.C_Str();
+
+                std::filesystem::path texPath(rawPath);
+                std::filesystem::path objPath(path);
+                std::filesystem::path baseDir = objPath.parent_path();
+                std::filesystem::path fullPath = baseDir / texPath;
+                fullPath = fullPath.lexically_normal();
+                std::string uri = fullPath.string();
+
                 m.baseColorTexture = addTextureIfUnique(
                     meshData.diffuseTextureFiles,
                     diffuseTextureMap,
@@ -90,48 +110,86 @@ namespace lzvk::loader {
                 std::cout << "[Material " << i << "] Diffuse texture: dummy.png" << std::endl;
             }
 
+            // ---------- emissive ----------
+            if (AI_SUCCESS == aiMat->GetTexture(aiTextureType_EMISSIVE, 0, &str)) {
+                std::string rawPath = str.C_Str();
+                std::filesystem::path texPath(rawPath);
+                std::filesystem::path objPath(path);
+                std::filesystem::path baseDir = objPath.parent_path();
+                std::filesystem::path fullPath = baseDir / texPath;
+                fullPath = fullPath.lexically_normal();
+                std::string uri = fullPath.string();
 
-            // ---------- other texture types ----------
-            struct TexTypeInfo {
-                aiTextureType type;
-                const char* name;
-            };
+                m.emissiveTexture = addTextureIfUnique(
+                    meshData.emissiveTextureFiles,
+                    emissiveTextureMap,
+                    uri
+                );
+                m.emissiveTexturePath = uri;
 
-            std::vector<TexTypeInfo> texTypes = {
-                { aiTextureType_SPECULAR,   "Specular" },
-                { aiTextureType_NORMALS,    "Normals" },
-                { aiTextureType_HEIGHT,     "Height/Bump" },
-                { aiTextureType_EMISSIVE,   "Emissive" },
-                { aiTextureType_OPACITY,    "Opacity" },
-                { aiTextureType_LIGHTMAP,   "Lightmap/Occlusion" },
-                { aiTextureType_METALNESS,  "Metalness" },
-                { aiTextureType_DIFFUSE_ROUGHNESS, "Roughness" },
-                { aiTextureType_AMBIENT_OCCLUSION, "AO" }
-            };
-
-            for (auto& t : texTypes) {
-                if (AI_SUCCESS == aiMat->GetTexture(t.type, 0, &str)) {
-                    std::string uri = str.C_Str();
-                    std::cout << "[Material " << i << "] "
-                        << t.name << " texture: " << uri << std::endl;
-                }
+                std::cout << "[Material " << i << "] Emissive texture: " << uri << std::endl;
+            }
+            else {
+                m.emissiveTexture = 0;
+                m.emissiveTexturePath = "dummy.png";
+                std::cout << "[Material " << i << "] Emissive texture: dummy.png" << std::endl;
             }
 
-            meshData.materials.push_back(m);
-            scene.materialNames.push_back("Material_" + std::to_string(i));
+            // ---------- normal ----------
+            bool normalFound = false;
+            if (AI_SUCCESS == aiMat->GetTexture(aiTextureType_NORMALS, 0, &str)) {
+                normalFound = true;
+            }
+            else if (AI_SUCCESS == aiMat->GetTexture(aiTextureType_HEIGHT, 0, &str)) {
+                normalFound = true;
+            }
 
-            std::cout << "Material " << i
-                << " -> baseColorTex = " << m.baseColorTexture
-                << std::endl;
+            if (normalFound) {
+                std::string rawPath = str.C_Str();
+                std::filesystem::path texPath(rawPath);
+                std::filesystem::path objPath(path);
+                std::filesystem::path baseDir = objPath.parent_path();
+                std::filesystem::path fullPath = baseDir / texPath;
+                fullPath = fullPath.lexically_normal();
+                std::string uri = fullPath.string();
+
+                m.normalTexture = addTextureIfUnique(
+                    meshData.normalTextureFiles,
+                    normalTextureMap,
+                    uri
+                );
+                m.normalTexturePath = uri;
+
+                std::cout << "[Material " << i << "] Normal texture: " << uri << std::endl;
+            }
+            else {
+                m.normalTexture = 0;
+                m.normalTexturePath = "dummy.png";
+                std::cout << "[Material " << i << "] Normal texture: dummy.png" << std::endl;
+            }
+
+
+   
+            aiString name;
+            if (aiMat->Get(AI_MATKEY_NAME, name) == AI_SUCCESS) {
+                std::string matName = name.C_Str();
+                scene.materialNames.push_back(matName);
+                std::cout << "[Material " << i << "] name: " << matName << std::endl;
+            }
+            else {
+                std::string fallbackName = "Material_" + std::to_string(i);
+                scene.materialNames.push_back(fallbackName);
+                std::cout << "[Material " << i << "] no name found, using fallback: " << fallbackName << std::endl;
+            }
+            meshData.materials.push_back(m);
+
         }
 
 
         // ========== LOAD MESHES + SCENE NODES ==========
 
         int root = addNode(scene, -1, 0);
-        glm::mat4 scaleMat = glm::scale(glm::mat4(1.0f), glm::vec3(0.1f));
-        glm::mat4 rotateMat = glm::rotate(glm::mat4(1.0f), glm::radians(-90.0f), glm::vec3(0, 1, 0));
-        glm::mat4 modelTransform = rotateMat * scaleMat;
+        glm::mat4 modelTransform = glm::mat4(1.0f);
 
         scene.localTransform[root] = modelTransform;
         scene.globalTransform[root] = modelTransform;
@@ -142,44 +200,36 @@ namespace lzvk::loader {
 
         std::function<void(aiNode*, int, int)> traverse;
         traverse = [&](aiNode* node, int parent, int level) {
-            std::cout
-                << std::string(level * 2, ' ')
-                << "[Node] " << node->mName.C_Str()
-                << ", meshes: " << node->mNumMeshes
-                << ", children: " << node->mNumChildren
-                << std::endl;
 
-            aiMatrix4x4 m = node->mTransformation;
-            std::cout << std::string(level * 2, ' ') << "  Transform matrix:\n"
-                << std::string(level * 2, ' ')
-                << m.a1 << " " << m.a2 << " " << m.a3 << " " << m.a4 << "\n"
-                << std::string(level * 2, ' ')
-                << m.b1 << " " << m.b2 << " " << m.b3 << " " << m.b4 << "\n"
-                << std::string(level * 2, ' ')
-                << m.c1 << " " << m.c2 << " " << m.c3 << " " << m.c4 << "\n"
-                << std::string(level * 2, ' ')
-                << m.d1 << " " << m.d2 << " " << m.d3 << " " << m.d4 << "\n";
-
+            // 1 add node name
             int nodeId = addNode(scene, parent, level);
             scene.nodeNames.push_back(node->mName.C_Str());
             scene.nameForNode[nodeId] = uint32_t(scene.nodeNames.size() - 1);
 
+            // 2 add node transformation
+            aiMatrix4x4 m = node->mTransformation;
             glm::mat4 local(1.0f);
             local = glm::transpose(glm::make_mat4(&m.a1));
             scene.localTransform[nodeId] = local;
             scene.globalTransform[nodeId] = glm::mat4(1.0f);
 
+            // 3 add node meshes
             for (unsigned int meshIndex = 0; meshIndex < node->mNumMeshes; meshIndex++) {
+                
+                // 3.1 add subnode for this mesh
                 aiMesh* aiMesh = aiScene->mMeshes[node->mMeshes[meshIndex]];
 
-                std::cout
-                    << std::string(level * 2, ' ')
-                    << "  [Mesh] Index: " << meshIndex
-                    << ", vertices: " << aiMesh->mNumVertices
-                    << ", faces: " << aiMesh->mNumFaces
-                    << ", material index: " << aiMesh->mMaterialIndex
-                    << std::endl;
+                // 3.1.1 subnode name
+                int meshNodeId = addNode(scene, nodeId, level + 1);
+                std::string meshNodeName = node->mName.C_Str() + std::string("_Mesh_") + std::to_string(meshIndex);
+                scene.nodeNames.push_back(meshNodeName);
+                scene.nameForNode[meshNodeId] = uint32_t(scene.nodeNames.size() - 1);
 
+                // 3.1.2 subnode transform
+                scene.localTransform[meshNodeId] = glm::mat4(1.0f);
+                scene.globalTransform[meshNodeId] = glm::mat4(1.0f);
+
+                // 3.1.3 subnode mesh
                 Mesh m;
                 m.vertexOffset = uint32_t(vertexStart);
                 m.materialID = aiMesh->mMaterialIndex;
@@ -198,7 +248,27 @@ namespace lzvk::loader {
                         uv.y = aiMesh->mTextureCoords[0][v].y;
                     }
 
-                    float vertex[5] = { pos.x, pos.y, pos.z, uv.x, uv.y };
+                    glm::vec3 normal(0.0f, 1.0f, 0.0f);
+                    if (aiMesh->HasNormals()) {
+                        normal.x = aiMesh->mNormals[v].x;
+                        normal.y = aiMesh->mNormals[v].y;
+                        normal.z = aiMesh->mNormals[v].z;
+                    }
+
+                    glm::vec3 tangent(1.0f, 0.0f, 0.0f);
+                    if (aiMesh->HasTangentsAndBitangents()) {
+                        tangent.x = aiMesh->mTangents[v].x;
+                        tangent.y = aiMesh->mTangents[v].y;
+                        tangent.z = aiMesh->mTangents[v].z;
+                    }
+
+                    float vertex[11] = {
+                         pos.x, pos.y, pos.z,
+                         uv.x, uv.y,
+                         normal.x, normal.y, normal.z,
+                         tangent.x, tangent.y, tangent.z
+                    };
+
                     const uint8_t* ptr = reinterpret_cast<const uint8_t*>(vertex);
                     meshData.vertexData.insert(
                         meshData.vertexData.end(),
@@ -221,33 +291,179 @@ namespace lzvk::loader {
 
                 meshData.meshes.push_back(m);
 
+                // add drawdata for each mesh
                 DrawData dd;
-                dd.transformId = nodeId;
-                dd.materialId = meshData.materials[m.materialID].baseColorTexture;
+                dd.transformId = meshNodeId;
+                dd.materialId = m.materialID;
                 scene.drawDataArray.push_back(dd);
+
+                scene.meshForNode[meshNodeId] = uint32_t(meshData.meshes.size() - 1);
+                scene.materialForNode[meshNodeId] = m.materialID;
             }
 
-            if (node->mNumMeshes > 0) {
-                scene.meshForNode[nodeId] = uint32_t(meshData.meshes.size() - node->mNumMeshes);
-            }
+            // traverse 
             for (unsigned int i = 0; i < node->mNumChildren; i++) {
+                
                 traverse(node->mChildren[i], nodeId, level + 1);
             }
-            };
+        };
 
         traverse(aiScene->mRootNode, root, 1);
 
+        std::cout << "After loading draw data size "  << scene.drawDataArray.size()<< std::endl;
+
         recalculateGlobalTransforms(scene);
 
-        std::cout << "Loaded mesh (Assimp): " << path
-            << ", nodes: " << scene.hierarchy.size()
-            << ", meshes: " << meshData.meshes.size()
-            << ", vertices: " << vertexStart << std::endl;
+        return true;
+    }
 
+    void saveMeshData(const std::string& path, const MeshData& meshData) {
+        FILE* f = fopen(path.c_str(), "wb");
+        if (!f) {
+            printf("Failed to open file %s for writing\n", path.c_str());
+            return;
+        }
+
+        auto saveString = [](FILE* f, const std::string& s) {
+            uint64_t len = s.length();
+            fwrite(&len, sizeof(len), 1, f);
+            fwrite(s.c_str(), 1, len, f);
+            };
+
+        auto saveMaterialList = [&](const std::vector<Material>& materials) {
+            uint64_t count = materials.size();
+            fwrite(&count, sizeof(count), 1, f);
+            for (const auto& m : materials) {
+                fwrite(&m.emissiveFactor, sizeof(glm::vec4), 1, f);
+                fwrite(&m.baseColorFactor, sizeof(glm::vec4), 1, f);
+                fwrite(&m.roughness, sizeof(float), 1, f);
+                fwrite(&m.metallicFactor, sizeof(float), 1, f);
+                fwrite(&m.alphaTest, sizeof(float), 1, f);
+                fwrite(&m.transparencyFactor, sizeof(float), 1, f);
+                fwrite(&m.baseColorTexture, sizeof(uint32_t), 1, f);
+                fwrite(&m.specularTexture, sizeof(uint32_t), 1, f);
+                fwrite(&m.emissiveTexture, sizeof(uint32_t), 1, f);
+                fwrite(&m.normalTexture, sizeof(uint32_t), 1, f);
+                fwrite(&m.opacityTexture, sizeof(uint32_t), 1, f);
+                fwrite(&m.occlusionTexture, sizeof(uint32_t), 1, f);
+                saveString(f, m.baseColorTexturePath);
+                saveString(f, m.specularTexturePath);
+                saveString(f, m.emissiveTexturePath);
+                saveString(f, m.normalTexturePath);
+                saveString(f, m.opacityTexturePath);
+                saveString(f, m.occlusionTexturePath);
+            }
+            };
+
+        auto saveStringList = [&](const std::vector<std::string>& list) {
+            uint64_t count = list.size();
+            fwrite(&count, sizeof(count), 1, f);
+            for (const auto& s : list) saveString(f, s);
+            };
+
+        uint64_t numMeshes = meshData.meshes.size();
+        fwrite(&numMeshes, sizeof(numMeshes), 1, f);
+        if (numMeshes > 0)
+            fwrite(meshData.meshes.data(), sizeof(Mesh), numMeshes, f);
+
+        uint64_t vertexDataSize = meshData.vertexData.size();
+        fwrite(&vertexDataSize, sizeof(vertexDataSize), 1, f);
+        if (vertexDataSize > 0)
+            fwrite(meshData.vertexData.data(), 1, vertexDataSize, f);
+
+        uint64_t indexDataSize = meshData.indexData.size();
+        fwrite(&indexDataSize, sizeof(indexDataSize), 1, f);
+        if (indexDataSize > 0)
+            fwrite(meshData.indexData.data(), sizeof(uint32_t), indexDataSize, f);
+
+        saveMaterialList(meshData.materials);
+        saveStringList(meshData.diffuseTextureFiles);
+        saveStringList(meshData.emissiveTextureFiles);
+        saveStringList(meshData.normalTextureFiles);
+        saveStringList(meshData.occlusionTextureFiles);
+
+        fclose(f);
+        printf("MeshData saved to %s\n", path.c_str());
+    }
+
+    bool loadMeshData(const std::string& path, MeshData& meshData) {
+        FILE* f = fopen(path.c_str(), "rb");
+        if (!f) return false;
+
+        auto loadString = [](FILE* f) -> std::string {
+            uint64_t len = 0;
+            fread(&len, sizeof(len), 1, f);
+            std::string s(len, '\0');
+            fread(&s[0], 1, len, f);
+            return s;
+            };
+
+        auto loadMaterialList = [&](std::vector<Material>& materials) {
+            uint64_t count = 0;
+            fread(&count, sizeof(count), 1, f);
+            materials.resize(count);
+            for (auto& m : materials) {
+                fread(&m.emissiveFactor, sizeof(glm::vec4), 1, f);
+                fread(&m.baseColorFactor, sizeof(glm::vec4), 1, f);
+                fread(&m.roughness, sizeof(float), 1, f);
+                fread(&m.metallicFactor, sizeof(float), 1, f);
+                fread(&m.alphaTest, sizeof(float), 1, f);
+                fread(&m.transparencyFactor, sizeof(float), 1, f);
+                fread(&m.baseColorTexture, sizeof(uint32_t), 1, f);
+                fread(&m.specularTexture, sizeof(uint32_t), 1, f);
+                fread(&m.emissiveTexture, sizeof(uint32_t), 1, f);
+                fread(&m.normalTexture, sizeof(uint32_t), 1, f);
+                fread(&m.opacityTexture, sizeof(uint32_t), 1, f);
+                fread(&m.occlusionTexture, sizeof(uint32_t), 1, f);
+                m.baseColorTexturePath = loadString(f);
+                m.specularTexturePath = loadString(f);
+                m.emissiveTexturePath = loadString(f);
+                m.normalTexturePath = loadString(f);
+                m.opacityTexturePath = loadString(f);
+                m.occlusionTexturePath = loadString(f);
+            }
+            };
+
+        auto loadStringList = [&](std::vector<std::string>& list) {
+            uint64_t count;
+            fread(&count, sizeof(count), 1, f);
+            list.resize(count);
+            for (uint64_t i = 0; i < count; ++i)
+                list[i] = loadString(f);
+            };
+
+        uint64_t numMeshes = 0;
+        fread(&numMeshes, sizeof(numMeshes), 1, f);
+        meshData.meshes.resize(numMeshes);
+        if (numMeshes > 0)
+            fread(meshData.meshes.data(), sizeof(Mesh), numMeshes, f);
+
+        uint64_t vertexDataSize = 0;
+        fread(&vertexDataSize, sizeof(vertexDataSize), 1, f);
+        meshData.vertexData.resize(vertexDataSize);
+        if (vertexDataSize > 0)
+            fread(meshData.vertexData.data(), 1, vertexDataSize, f);
+
+        uint64_t indexDataSize = 0;
+        fread(&indexDataSize, sizeof(indexDataSize), 1, f);
+        meshData.indexData.resize(indexDataSize);
+        if (indexDataSize > 0)
+            fread(meshData.indexData.data(), sizeof(uint32_t), indexDataSize, f);
+
+        loadMaterialList(meshData.materials);
+        loadStringList(meshData.diffuseTextureFiles);
+        loadStringList(meshData.emissiveTextureFiles);
+        loadStringList(meshData.normalTextureFiles);
+        loadStringList(meshData.occlusionTextureFiles);
+
+        fclose(f);
+        printf("MeshData loaded from %s\n", path.c_str());
         return true;
     }
 
 
 }
+
+
 
 

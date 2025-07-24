@@ -27,8 +27,8 @@ namespace lzvk::loader {
 
 		std::unordered_map<uint32_t, uint32_t> meshForNode;
 		std::unordered_map<uint32_t, uint32_t> materialForNode;
-
 		std::unordered_map<uint32_t, uint32_t> nameForNode;
+
 		std::vector<std::string> nodeNames;
 		std::vector<std::string> materialNames;
 		std::vector<DrawData> drawDataArray;
@@ -39,6 +39,9 @@ namespace lzvk::loader {
 	bool recalculateGlobalTransforms(Scene& scene);
 	void markAsChanged(Scene& scene, int node);
 	std::string getNodeName(const Scene& scene, int node);
+
+	void saveScene(const std::string& path, const Scene& scene);
+	bool loadScene(const std::string& path, Scene& scene);
 }
 
 

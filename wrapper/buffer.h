@@ -62,7 +62,9 @@ namespace lzvk::wrapper {
 		}
 		[[nodiscard]] auto getBuffer() const { return mBuffer; }
 		[[nodiscard]] auto& getBufferInfo() { return mBufferInfo; }
-
+		[[nodiscard]] auto getVkDeviceMemory() const {
+			return mBufferMemory;
+		}
 	private:
 
 		uint32_t findMemoryType(uint32_t typeFilter, VkMemoryPropertyFlags properties);

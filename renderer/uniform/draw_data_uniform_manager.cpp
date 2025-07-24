@@ -10,6 +10,7 @@ namespace lzvk::renderer {
         const lzvk::loader::DrawData* initialData,
         int frameCount) {
 
+  
         mDevice = device;
 
         mDrawDataParam = lzvk::wrapper::UniformParameter::create();
@@ -28,18 +29,6 @@ namespace lzvk::renderer {
             );
             mDrawDataParam->mBuffers.push_back(buffer);
 
-        }
-
-        if (initialData) {
-            std::cout << "[DEBUG] Checking initialData contents:" << std::endl;
-            const lzvk::loader::DrawData* drawData = reinterpret_cast<const lzvk::loader::DrawData*>(initialData);
-            size_t count = mDrawDataParam->mSize / sizeof(lzvk::loader::DrawData);
-            for (size_t j = 0; j < count; ++j) {
-                std::cout << "  DrawData[" << j << "] -> transformId="
-                    << drawData[j].transformId
-                    << ", materialId="
-                    << drawData[j].materialId << std::endl;
-            }
         }
     }
 

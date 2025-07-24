@@ -1,11 +1,16 @@
 #include "scene_mesh_renderer.h"
 #include <cstring>
 #include <stdexcept>
+#include <filesystem>
 
 
 namespace lzvk::renderer {
 
-    SceneMeshRenderer::SceneMeshRenderer(const lzvk::wrapper::Device::Ptr& device, const lzvk::wrapper::CommandPool::Ptr& commandPool, lzvk::loader::MeshData& meshData, const lzvk::loader::Scene& scene) {
+    SceneMeshRenderer::SceneMeshRenderer(const lzvk::wrapper::Device::Ptr& device, 
+                                         const lzvk::wrapper::CommandPool::Ptr& commandPool, 
+                                         lzvk::loader::MeshData& meshData,
+                                         lzvk::loader::Scene& scene,
+                                         int frameCount) {
 
         mDevice = device;
         mCommandPool = commandPool;
@@ -24,39 +29,187 @@ namespace lzvk::renderer {
             meshData.indexData.data()
         );
 
-        loadTextures(mDevice, mCommandPool, meshData);
+
+        //
+       // ========== STATIC SET ==========
+       //
+
+       // Create TransformUniformManager
+        mTransformUniformManager = lzvk::renderer::TransformUniformManager::create();
+        mTransformUniformManager->init(
+            mDevice,
+            scene.globalTransform.size(),
+            scene.globalTransform.data(),
+            frameCount
+        );
 
 
-        // Create draw indirect buffer
-        std::unordered_map<uint32_t, uint32_t> nodeIdToDrawDataIndex;
-        for (size_t i = 0; i < scene.drawDataArray.size(); ++i) {
-            nodeIdToDrawDataIndex[scene.drawDataArray[i].transformId] = static_cast<uint32_t>(i);
-        }
+        // Create MaterialUniformManager
+        mMaterialUniformManager = lzvk::renderer::MaterialUniformManager::create();
+        mMaterialUniformManager->init(
+            mDevice,
+            meshData.materials.size(),
+            meshData.materials.data(),
+            frameCount
+        );
 
+        // Create DrawDataUniformManager
+        mDrawDataUniformManager = lzvk::renderer::DrawDataUniformManager::create();
+        mDrawDataUniformManager->init(
+            mDevice,
+            scene.drawDataArray.size(),
+            scene.drawDataArray.data(),
+            frameCount
+        );
+
+        // Create Static DescriptorSet (set = 1)
+        std::vector<lzvk::wrapper::UniformParameter::Ptr> staticParams;
+
+        auto append = [&](const std::vector<lzvk::wrapper::UniformParameter::Ptr>& params) {
+            staticParams.insert(staticParams.end(), params.begin(), params.end());
+            };
+
+        append(mTransformUniformManager->getParams());
+        append(mMaterialUniformManager->getParams());
+        append(mDrawDataUniformManager->getParams());
+
+        mDescriptorSetLayout_Static = lzvk::wrapper::DescriptorSetLayout::create(mDevice);
+        mDescriptorSetLayout_Static->build(staticParams);
+
+        mDescriptorPool_Static = lzvk::wrapper::DescriptorPool::create(mDevice);
+        mDescriptorPool_Static->build(staticParams, 1);
+
+        mDescriptorSet_Static = lzvk::wrapper::DescriptorSet::create(
+            mDevice,
+            staticParams,
+            mDescriptorSetLayout_Static,
+            mDescriptorPool_Static,
+            1
+        );
+
+        //
+        // ========== DIFFUSE TEXTURE SET ==========
+        //
+
+        mSceneTextureManager = lzvk::renderer::SceneTextureManager::create();
+        mSceneTextureManager->init(
+            mDevice,
+            mCommandPool,
+            meshData,
+            frameCount
+        );
+
+        //
+        // Diffuse descriptor set (set = 2)
+        //
+        auto diffuseParams = mSceneTextureManager->getDiffuseParams();
+
+        mDescriptorSetLayout_Diffuse = lzvk::wrapper::DescriptorSetLayout::create(mDevice);
+        mDescriptorSetLayout_Diffuse->build(diffuseParams);
+
+        mDescriptorPool_Diffuse = lzvk::wrapper::DescriptorPool::create(mDevice);
+        mDescriptorPool_Diffuse->build(diffuseParams, 1);
+
+        mDescriptorSet_Diffuse = lzvk::wrapper::DescriptorSet::create(
+            mDevice,
+            diffuseParams,
+            mDescriptorSetLayout_Diffuse,
+            mDescriptorPool_Diffuse,
+            1
+        );
+
+        //
+        // ========== EMISSIVE TEXTURE SET ==========
+        //
+
+        auto emissiveParams = mSceneTextureManager->getEmissiveParams();
+
+        mDescriptorSetLayout_Emissive = lzvk::wrapper::DescriptorSetLayout::create(mDevice);
+        mDescriptorSetLayout_Emissive->build(emissiveParams);
+
+        mDescriptorPool_Emissive = lzvk::wrapper::DescriptorPool::create(mDevice);
+        mDescriptorPool_Emissive->build(emissiveParams, 1);
+
+        mDescriptorSet_Emissive = lzvk::wrapper::DescriptorSet::create(
+            mDevice,
+            emissiveParams,
+            mDescriptorSetLayout_Emissive,
+            mDescriptorPool_Emissive,
+            1
+        );
+
+        //
+        // ========== NORMAL TEXTURE SET ==========
+        //
+
+        auto normalParams = mSceneTextureManager->getNormalParams();
+
+        mDescriptorSetLayout_Normal = lzvk::wrapper::DescriptorSetLayout::create(mDevice);
+        mDescriptorSetLayout_Normal->build(normalParams);
+
+        mDescriptorPool_Normal = lzvk::wrapper::DescriptorPool::create(mDevice);
+        mDescriptorPool_Normal->build(normalParams, 1);
+
+        mDescriptorSet_Normal = lzvk::wrapper::DescriptorSet::create(
+            mDevice,
+            normalParams,
+            mDescriptorSetLayout_Normal,
+            mDescriptorPool_Normal,
+            1
+        );
+
+
+
+        //
+        // ========== INDIRECT BUFFER ==========
+        //
 
         std::vector<VkDrawIndexedIndirectCommand> drawCommands;
+
         for (size_t i = 0; i < scene.drawDataArray.size(); ++i) {
+
             const lzvk::loader::DrawData& dd = scene.drawDataArray[i];
-            const lzvk::loader::Mesh& mesh = meshData.meshes[i];
 
-            VkDrawIndexedIndirectCommand cmd{};
-            cmd.indexCount = mesh.indexCount;
-            cmd.instanceCount = 1;
-            cmd.firstIndex = mesh.indexOffset;
-            cmd.vertexOffset = mesh.vertexOffset;
-            cmd.firstInstance = static_cast<uint32_t>(i);
+            auto it = scene.meshForNode.find(dd.transformId);
 
-            std::cout << "DrawCmd[" << drawCommands.size() << "] "
-                << "firstInstance = " << cmd.firstInstance
-                << ", indexCount = " << cmd.indexCount
-                << ", firstIndex = " << cmd.firstIndex
-                << ", vertexOffset = " << cmd.vertexOffset
-                << std::endl;
+            if (it != scene.meshForNode.end()) {
 
-            drawCommands.push_back(cmd);
+                uint32_t meshIdx = it->second;
+                const  lzvk::loader::Mesh& mesh = meshData.meshes[meshIdx];
+
+                VkDrawIndexedIndirectCommand cmd{};
+                cmd.indexCount = mesh.indexCount;
+                cmd.instanceCount = 1;
+                cmd.firstIndex = mesh.indexOffset;
+                cmd.vertexOffset = mesh.vertexOffset;
+                cmd.firstInstance = static_cast<uint32_t>(i);
+
+                drawCommands.push_back(cmd);
+            }
         }
 
         mDrawCount = static_cast<uint32_t>(drawCommands.size());
+
+        //for (size_t i = 0; i < scene.drawDataArray.size(); ++i) {
+        //    const lzvk::loader::DrawData& dd = scene.drawDataArray[i];
+        //    const lzvk::loader::Mesh& mesh = meshData.meshes[scene.meshForNode[dd.transformId]];
+        //    const glm::mat4& transform = scene.globalTransform[dd.transformId];
+        //    const lzvk::loader::Material& mat = meshData.materials[dd.materialId];
+
+        //    glm::vec3 translation = glm::vec3(transform[3]);
+        //    float scaleX = glm::length(glm::vec3(transform[0]));
+
+        //    printf("[Draw %zu] meshID = %u, matID = %u, indexCount = %u, trans = (%.2f, %.2f, %.2f), scale = %.5f, baseColorTex = %d\n",
+        //        i,
+        //        scene.meshForNode[dd.transformId],
+        //        dd.materialId,
+        //        mesh.indexCount,
+        //        translation.x, translation.y, translation.z,
+        //        scaleX,
+        //        mat.baseColorTexture
+        //    );
+        //}
+
 
         mIndirectBuffer = lzvk::wrapper::Buffer::createStorageBuffer(
             device,
@@ -66,32 +219,6 @@ namespace lzvk::renderer {
         );
     }
 
-    void SceneMeshRenderer::loadTextures(const lzvk::wrapper::Device::Ptr& device, 
-                                         const lzvk::wrapper::CommandPool::Ptr& commandPool, 
-                                               lzvk::loader::MeshData& meshData){
-        mDiffuseTextures.clear();
-
-        auto loadTextureArray = [&](const std::vector<std::string>& texFiles,
-            std::vector<Texture::Ptr>& textures,
-            const std::string& prefix) {
-                for (const auto& path : texFiles) {
-                    std::string fullPath = prefix + path;
-                    try {
-                        auto texture = Texture::create(device, commandPool, fullPath);
-                        textures.push_back(texture);
-                    }
-                    catch (const std::exception& e) {
-                        std::cerr << "Failed to load texture: "
-                            << fullPath << " - " << e.what() << std::endl;
-                        textures.push_back(nullptr);
-                    }
-                }
-            };
-
-        loadTextureArray(meshData.diffuseTextureFiles, mDiffuseTextures, "assets/crytek_sponza/");
-
-        std::cout << "Loaded diffuse textures: " << mDiffuseTextures.size() << std::endl;
-    }
 
     SceneMeshRenderer::~SceneMeshRenderer() {}
 

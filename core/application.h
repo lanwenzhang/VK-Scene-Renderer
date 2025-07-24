@@ -99,29 +99,27 @@ namespace lzvk::core{
 		
 		lzvk::renderer::SceneMeshRenderer::Ptr mSceneMesh{ nullptr };
 		lzvk::renderer::FrameUniformManager::Ptr mFrameUniformManager{ nullptr };
-		lzvk::renderer::TransformUniformManager::Ptr mTransformUniformManager{ nullptr };
-		lzvk::renderer::MaterialUniformManager::Ptr mMaterialUniformManager{ nullptr };
 		lzvk::renderer::SkyboxUniformManager::Ptr mSkyboxUniformManager{ nullptr };
-		lzvk::renderer::DrawDataUniformManager::Ptr mDrawDataUniformManager{ nullptr };
-		lzvk::renderer::SceneTextureManager::Ptr mSceneTextureManager{ nullptr };
 
 		// Frame Uniform (per-frame)
 		lzvk::wrapper::DescriptorSetLayout::Ptr mDescriptorSetLayout_Frame{ nullptr };
 		lzvk::wrapper::DescriptorPool::Ptr      mDescriptorPool_Frame{ nullptr };
 		lzvk::wrapper::DescriptorSet::Ptr       mDescriptorSet_Frame{ nullptr };
 
-		// Static Uniforms (static resources)
-		lzvk::wrapper::DescriptorSetLayout::Ptr mDescriptorSetLayout_Static{ nullptr };
-		lzvk::wrapper::DescriptorPool::Ptr      mDescriptorPool_Static{ nullptr };
-		lzvk::wrapper::DescriptorSet::Ptr       mDescriptorSet_Static{ nullptr };
+		// Skybox 
+		lzvk::wrapper::DescriptorSetLayout::Ptr mDescriptorSetLayout_Skybox{ nullptr };
+		lzvk::wrapper::DescriptorPool::Ptr      mDescriptorPool_Skybox{ nullptr };
+		lzvk::wrapper::DescriptorSet::Ptr       mDescriptorSet_Skybox{ nullptr };
 
-		// Static Uniforms (diffuse texture)
-		lzvk::wrapper::DescriptorSetLayout::Ptr mDescriptorSetLayout_Diffuse{ nullptr };
-		lzvk::wrapper::DescriptorPool::Ptr      mDescriptorPool_Diffuse{ nullptr };
-		lzvk::wrapper::DescriptorSet::Ptr       mDescriptorSet_Diffuse{ nullptr };
+		lzvk::loader::Scene    mSceneExterior;
+		lzvk::loader::MeshData mMeshDataExterior;
+
+		lzvk::loader::Scene    mSceneInterior;
+		lzvk::loader::MeshData mMeshDataInterior;
 
 		lzvk::loader::Scene    mScene;
 		lzvk::loader::MeshData mMeshData;
+
 		lzvk::renderer::Camera mCamera;
 		VPMatrices mVPMatrices;
 	};

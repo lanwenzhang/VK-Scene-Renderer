@@ -86,6 +86,115 @@ namespace lzvk::loader {
 		return std::string();
 	}
 
+    void saveScene(const std::string& path, const Scene& scene) {
+        FILE* f = fopen(path.c_str(), "wb");
+        if (!f) {
+            printf("Failed to open file %s for writing\n", path.c_str());
+            return;
+        }
+
+        uint64_t numNodes = scene.hierarchy.size();
+        fwrite(&numNodes, sizeof(numNodes), 1, f);
+        if (numNodes > 0) {
+            fwrite(scene.hierarchy.data(), sizeof(Hierarchy), numNodes, f);
+            fwrite(scene.localTransform.data(), sizeof(glm::mat4), numNodes, f);
+            fwrite(scene.globalTransform.data(), sizeof(glm::mat4), numNodes, f);
+        }
+
+        auto saveMap = [](FILE* f, const std::unordered_map<uint32_t, uint32_t>& map) {
+            uint64_t count = map.size();
+            fwrite(&count, sizeof(count), 1, f);
+            for (const auto& [k, v] : map) {
+                fwrite(&k, sizeof(k), 1, f);
+                fwrite(&v, sizeof(v), 1, f);
+            }
+            };
+
+        saveMap(f, scene.meshForNode);
+        saveMap(f, scene.materialForNode);
+        saveMap(f, scene.nameForNode);
+
+        auto saveStringList = [](FILE* f, const std::vector<std::string>& list) {
+            uint64_t count = list.size();
+            fwrite(&count, sizeof(count), 1, f);
+            for (const auto& s : list) {
+                uint64_t len = s.length();
+                fwrite(&len, sizeof(len), 1, f);
+                fwrite(s.c_str(), 1, len, f);
+            }
+            };
+
+        saveStringList(f, scene.nodeNames);
+        saveStringList(f, scene.materialNames);
+
+        uint64_t numDrawData = scene.drawDataArray.size();
+        fwrite(&numDrawData, sizeof(numDrawData), 1, f);
+        if (numDrawData > 0) {
+            fwrite(scene.drawDataArray.data(), sizeof(DrawData), numDrawData, f);
+        }
+
+        fclose(f);
+        printf("Scene saved to %s\n", path.c_str());
+    }
+
+    bool loadScene(const std::string& path, Scene& scene) {
+        FILE* f = fopen(path.c_str(), "rb");
+        if (!f) return false;
+
+        uint64_t numNodes;
+        fread(&numNodes, sizeof(numNodes), 1, f);
+        scene.hierarchy.resize(numNodes);
+        scene.localTransform.resize(numNodes);
+        scene.globalTransform.resize(numNodes);
+        if (numNodes > 0) {
+            fread(scene.hierarchy.data(), sizeof(Hierarchy), numNodes, f);
+            fread(scene.localTransform.data(), sizeof(glm::mat4), numNodes, f);
+            fread(scene.globalTransform.data(), sizeof(glm::mat4), numNodes, f);
+        }
+
+        auto loadMap = [](FILE* f, std::unordered_map<uint32_t, uint32_t>& map) {
+            uint64_t count;
+            fread(&count, sizeof(count), 1, f);
+            for (uint64_t i = 0; i < count; i++) {
+                uint32_t k, v;
+                fread(&k, sizeof(k), 1, f);
+                fread(&v, sizeof(v), 1, f);
+                map[k] = v;
+            }
+            };
+
+        loadMap(f, scene.meshForNode);
+        loadMap(f, scene.materialForNode);
+        loadMap(f, scene.nameForNode);
+
+        auto loadStringList = [](FILE* f, std::vector<std::string>& list) {
+            uint64_t count;
+            fread(&count, sizeof(count), 1, f);
+            list.resize(count);
+            for (uint64_t i = 0; i < count; i++) {
+                uint64_t len;
+                fread(&len, sizeof(len), 1, f);
+                list[i].resize(len);
+                fread(&list[i][0], 1, len, f);
+            }
+            };
+
+        loadStringList(f, scene.nodeNames);
+        loadStringList(f, scene.materialNames);
+
+        uint64_t numDrawData;
+        fread(&numDrawData, sizeof(numDrawData), 1, f);
+        scene.drawDataArray.resize(numDrawData);
+        if (numDrawData > 0) {
+            fread(scene.drawDataArray.data(), sizeof(DrawData), numDrawData, f);
+        }
+
+
+        fclose(f);
+        printf("Scene loaded from %s\n", path.c_str());
+        return true;
+    }
+
 
 }
 

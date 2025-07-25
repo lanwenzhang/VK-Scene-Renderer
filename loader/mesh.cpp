@@ -80,10 +80,24 @@ namespace lzvk::loader {
             m.opacityTexturePath = "";
             m.specularTexturePath = "";
 
-
-            aiString str;
+            // -------- base color factor + emissive factor --------
+            aiColor4D color;
+            if (aiGetMaterialColor(aiMat, AI_MATKEY_COLOR_AMBIENT, &color) == AI_SUCCESS) {
+                m.emissiveFactor = glm::vec4(color.r, color.g, color.b, color.a);
+                if (m.emissiveFactor.w > 1.0f) m.emissiveFactor.w = 1.0f;
+            }
+            if (aiGetMaterialColor(aiMat, AI_MATKEY_COLOR_DIFFUSE, &color) == AI_SUCCESS) {
+                
+               m.baseColorFactor = glm::vec4(color.r, color.g, color.b, color.a);
+               if (m.baseColorFactor.w > 1.0f) m.baseColorFactor.w = 1.0f;
+            }
+            if (aiGetMaterialColor(aiMat, AI_MATKEY_COLOR_EMISSIVE, &color) == AI_SUCCESS) {
+                m.emissiveFactor += glm::vec4(color.r, color.g, color.b, color.a);
+                if (m.emissiveFactor.w > 1.0f) m.emissiveFactor.w = 1.0f;
+            }
 
             // ---------- diffuse ----------
+            aiString str;
             if (AI_SUCCESS == aiMat->GetTexture(aiTextureType_DIFFUSE, 0, &str)) {
                 std::string rawPath = str.C_Str();
 
@@ -135,6 +149,45 @@ namespace lzvk::loader {
                 std::cout << "[Material " << i << "] Emissive texture: dummy.png" << std::endl;
             }
 
+            // ---------- transparencyFactor ----------
+            const float opaquenessThreshold = 0.05f;
+            float opacity                   = 1.0f;
+
+            if (aiGetMaterialFloat(aiMat, AI_MATKEY_OPACITY, &opacity) == AI_SUCCESS) {
+                m.transparencyFactor = glm::clamp(1.0f - opacity, 0.0f, 1.0f);
+                if (m.transparencyFactor >= 1.0f - opaquenessThreshold)
+                    m.transparencyFactor = 0.0f;
+            }
+
+            // ---------- transparent color ----------
+            if (aiGetMaterialColor(aiMat, AI_MATKEY_COLOR_TRANSPARENT, &color) == AI_SUCCESS) {
+                const float opacity = std::max(std::max(color.r, color.g), color.b);
+                m.transparencyFactor = glm::clamp(opacity, 0.0f, 1.0f);
+                if (m.transparencyFactor >= 1.0f - opaquenessThreshold)
+                    m.transparencyFactor = 0.0f;
+                m.alphaTest = 0.5f;  
+            }
+
+            // ---------- opacity texture ----------
+            if (aiMat->GetTexture(aiTextureType_OPACITY, 0, &str) == AI_SUCCESS) {
+                std::string rawPath = str.C_Str();
+                std::filesystem::path texPath(rawPath);
+                std::filesystem::path objPath(path);
+                std::filesystem::path baseDir = objPath.parent_path();
+                std::filesystem::path fullPath = baseDir / texPath;
+                fullPath = fullPath.lexically_normal();
+                std::string uri = fullPath.string();
+
+                m.opacityTexturePath = uri;
+                m.opacityTexture = addTextureIfUnique(
+                    meshData.occlusionTextureFiles,
+                    std::unordered_map<std::string, int>{},  // optional: cache
+                    uri
+                );
+                m.alphaTest = 0.5f;  // enable alpha test
+            }
+
+
             // ---------- normal ----------
             bool normalFound = false;
             if (AI_SUCCESS == aiMat->GetTexture(aiTextureType_NORMALS, 0, &str)) {
@@ -169,10 +222,10 @@ namespace lzvk::loader {
             }
 
 
-   
             aiString name;
+            std::string matName;
             if (aiMat->Get(AI_MATKEY_NAME, name) == AI_SUCCESS) {
-                std::string matName = name.C_Str();
+                matName = name.C_Str();
                 scene.materialNames.push_back(matName);
                 std::cout << "[Material " << i << "] name: " << matName << std::endl;
             }
@@ -181,6 +234,58 @@ namespace lzvk::loader {
                 scene.materialNames.push_back(fallbackName);
                 std::cout << "[Material " << i << "] no name found, using fallback: " << fallbackName << std::endl;
             }
+
+            // apply heuristic
+            auto nameContains = [&](const char* keyword) {
+                return matName.find(keyword) != std::string::npos;
+                };
+
+            if (nameContains("MASTER_Glass_Clean") || nameContains("MenuSign_02_Glass") || nameContains("Vespa_Headlight")) {
+                m.alphaTest = 0.75f;
+                m.transparencyFactor = 0.2f;
+            }
+            else if (nameContains("MASTER_Glass_Exterior") || nameContains("MASTER_Focus_Glass")) {
+                m.alphaTest = 0.75f;
+                m.transparencyFactor = 0.3f;
+            }
+            else if (nameContains("MASTER_Frosted_Glass") || nameContains("MASTER_Interior_01_Frozen_Glass")) {
+                m.alphaTest = 0.75f;
+                m.transparencyFactor = 0.2f;
+            }
+            else if (nameContains("Streetlight_Glass")) {
+                m.alphaTest = 0.75f;
+                m.transparencyFactor = 0.15f;
+                m.baseColorTexture = -1;
+            }
+            else if (nameContains("Paris_LiquorBottle_01_Glass_Wine")) {
+                m.alphaTest = 0.56f;
+                m.transparencyFactor = 0.35f;
+            }
+            else if (nameContains("Paris_LiquorBottle_02_Glass")) {
+                m.alphaTest = 0.56f;
+                m.transparencyFactor = 0.1f;
+            }
+            else if (nameContains("Bottle")) {
+                m.alphaTest = 0.56f;
+                m.transparencyFactor = 0.2f;
+            }
+            else if (nameContains("Glass")) {
+                m.alphaTest = 0.56f;
+                m.transparencyFactor = 0.1f;
+            }
+            else if (nameContains("Metal")) {
+                m.metallicFactor = 1.0f;
+                m.roughness = 0.1f;
+            }
+
+
+            // ------ DEBUG transparency info ------
+            std::cout << "[Material " << i << "] alphaTest = " << m.alphaTest
+                << ", transparency = " << m.transparencyFactor
+                << ", baseColorTex = " << m.baseColorTexturePath
+                << ", baseColorfactor.a = " << m.baseColorFactor.a
+                << ", opacityTex = " << m.opacityTexturePath << std::endl;
+
             meshData.materials.push_back(m);
 
         }

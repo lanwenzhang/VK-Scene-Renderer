@@ -334,8 +334,8 @@ namespace lzvk::core {
 	void Application::createSceneGraphPipeline() {
 
 		std::vector<lzvk::wrapper::Shader::Ptr> shaderGroup{};
-		shaderGroup.push_back(lzvk::wrapper::Shader::create(mDevice, "shaders/sceneGraph/sceneGraphvs.spv", VK_SHADER_STAGE_VERTEX_BIT, "main"));
-		shaderGroup.push_back(lzvk::wrapper::Shader::create(mDevice, "shaders/sceneGraph/sceneGraphfs.spv", VK_SHADER_STAGE_FRAGMENT_BIT, "main"));
+		shaderGroup.push_back(lzvk::wrapper::Shader::create(mDevice, "shaders/scene_graph/scene_graph_vs.spv", VK_SHADER_STAGE_VERTEX_BIT, "main"));
+		shaderGroup.push_back(lzvk::wrapper::Shader::create(mDevice, "shaders/scene_graph/scene_graph_fs.spv", VK_SHADER_STAGE_FRAGMENT_BIT, "main"));
 		mSceneGraphPipeline->setShaderGroup(shaderGroup);
 
 		// Vertex input
@@ -543,25 +543,7 @@ namespace lzvk::core {
 		mWidth = mSwapChain->getExtent().width;
 		mHeight = mSwapChain->getExtent().height;
 
-		//// Render pass
-		//mRenderPass = Wrapper::RenderPass::create(mDevice);
-		//createRenderPass();
-
 		mSwapChain->createFrameBuffers(mRenderPass);
-
-		//// 3 Start render
-		//// 3.1 Pipeline
-		//mSkyboxPipeline = Wrapper::Pipeline::create(mDevice, mRenderPass);
-		//createSkyboxPipeline();
-		//
-		//mSceneGraphPipeline = Wrapper::Pipeline::create(mDevice, mRenderPass);
-		//createSceneGraphPipeline();
-
-		//// 3.2 Command buffer
-		//createCommandBuffers();
-
-		//// 3.3 Sync
-		//createSyncObjects();
 
 	}
 

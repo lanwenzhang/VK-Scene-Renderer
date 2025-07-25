@@ -7,7 +7,7 @@ layout(location = 1) in vec2 fragUV;
 layout(location = 2) in vec3 fragNormal;
 layout(location = 3) in mat3 tbn;
 layout(location = 6) in flat uint matID;
-layout(location = 7) in flat uint drawID;
+
 
 layout(location = 0) out vec4 outColor;
 
@@ -35,18 +35,22 @@ layout(set = 3, binding = 0) uniform sampler2D emissiveTextures[];
 layout(set = 4, binding = 0) uniform sampler2D normalTextures[];
 
 
-//void main() {
-//
-//     outColor = vec4(0.0, 1.0, 0.0, 1.0);  
-//
-//}
-
-
-
-void runAlphaTest(float alpha, float threshold)
+void runAlphaTest(float alpha, float alphaThreshold)
 {
-    if (alpha < threshold)
-        discard;
+  if (alphaThreshold > 0.0) {
+
+    mat4 thresholdMatrix = mat4(
+      1.0  / 17.0,  9.0 / 17.0,  3.0 / 17.0, 11.0 / 17.0,
+      13.0 / 17.0,  5.0 / 17.0, 15.0 / 17.0,  7.0 / 17.0,
+      4.0  / 17.0, 12.0 / 17.0,  2.0 / 17.0, 10.0 / 17.0,
+      16.0 / 17.0,  8.0 / 17.0, 14.0 / 17.0,  6.0 / 17.0
+    );
+
+    alpha = clamp(alpha - 0.5 * thresholdMatrix[int(mod(gl_FragCoord.x, 4.0))][int(mod(gl_FragCoord.y, 4.0))], 0.0, 1.0);
+
+    if (alpha < alphaThreshold)
+      discard;
+  }
 }
 
 
@@ -54,13 +58,12 @@ void main()
 {
 
     vec4 baseColor = materials[matID].baseColorFactor;
-    if (materials[matID].baseColorTexture > 0) {
-
+    if(materials[matID].baseColorTexture > 0){
+    
         baseColor *= texture(diffuseTextures[materials[matID].baseColorTexture], fragUV);
     }
 
-    runAlphaTest(baseColor.a, materials[matID].alphaTest);
-
+    runAlphaTest(baseColor.a, materials[matID].alphaTest / max(32.0 * fwidth(fragUV.x), 1.0));
 
     vec3 normal = normalize(fragNormal);
     if (materials[matID].normalTexture > 0) {

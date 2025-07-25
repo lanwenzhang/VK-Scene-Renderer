@@ -10,7 +10,6 @@ layout(location = 1) out vec2 fragUV;
 layout(location = 2) out vec3 fragNormal;
 layout(location = 3) out mat3 tbn;
 layout(location = 6) out flat uint matID;
-layout(location = 7) out flat uint drawID;
 
 
 struct DrawData {
@@ -42,7 +41,6 @@ void main() {
     tbn = mat3(fragTangent, fragBitangent, fragNormal);
 
     matID = dd[gl_BaseInstance].materialId;
-    drawID = gl_BaseInstance;
 
     gl_Position = vpUBO.mProjectionMatrix * vpUBO.mViewMatrix * worldPos;
 

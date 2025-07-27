@@ -5,6 +5,11 @@ A real-time Vulkan renderer supporting large-scale 3D scenes, with scene graph m
 ## Screenshots
 ![LZ-Scene-Renderer](data/screenshot_01.png)
 
+## Features
+- Scene graph
+- Batch rendering
+- Indirect rendering
+- SSAO
 
 ## Build
 
@@ -25,5 +30,4 @@ cmake -G "Visual Studio 17 2022" -A x64 ..
 ## Reference
 * [Vulkan Tutorial](https://vulkan-tutorial.com/)
 * [3D Grphics Rendering Cookbook 2nd Edition](https://github.com/PacktPublishing/3D-Graphics-Rendering-Cookbook-Second-Edition/tree/main)
-* [Vulkan C++ examples Sascha Willems](https://github.com/SaschaWillems/Vulkan)
 * [McGuire Computer Graphics Archive](https://casual-effects.com/data/)

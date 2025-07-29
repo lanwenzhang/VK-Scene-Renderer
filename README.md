@@ -6,10 +6,10 @@ A real-time Vulkan renderer supporting large-scale 3D scenes, with scene graph m
 ![LZ-Scene-Renderer](data/screenshot_01.png)
 
 ## Features
-- Scene graph
 - Batch rendering
 - Indirect rendering
-- SSAO
+- Multisample anti-aliasing
+- Screen space ambient occulusion
 
 ## Build
 

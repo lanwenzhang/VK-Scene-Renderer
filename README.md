@@ -9,7 +9,7 @@ A real-time Vulkan renderer supporting large-scale 3D scenes, with scene graph m
 - Batch rendering
 - Indirect rendering
 - Screen space ambient occulusion
-- HDR tone mapping
+- ACES filmic tone mapping
 
 ## Build
 

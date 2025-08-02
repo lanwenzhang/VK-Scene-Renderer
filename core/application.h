@@ -38,6 +38,7 @@
 #include "../renderer/uniform/ssao_uniform_manager.h"
 #include "../renderer/uniform/blur_uniform_manager.h"
 #include "../renderer/uniform/combine_uniform_manager.h"
+#include "../renderer/uniform/tone_mapping_uniform_manager.h"
 #include "../renderer/texture/texture.h"
 #include "../renderer/texture/cube_map_texture.h"
 #include "../renderer/camera/camera.h"
@@ -72,6 +73,8 @@ namespace lzvk::core{
 		void createGeometryFramebuffer();
 		void createSSAOResources();
 		void createBlurImages();
+		void createHDRImages();
+
 
 		// scene buffer
 		void createSceneBuffers();
@@ -86,6 +89,7 @@ namespace lzvk::core{
 		void createSSAOPipeline();
 		void createBlurPipelines();
 		void createCombinePipeline();
+		void createToneMappingPipeline();
 
 		// command buffers
 		void createCommandBuffers();
@@ -93,7 +97,8 @@ namespace lzvk::core{
 		void recordGeometryPass(const lzvk::wrapper::CommandBuffer::Ptr& cmd);
 		void recordSSAOPass(const lzvk::wrapper::CommandBuffer::Ptr& cmd);
 		void recordBlurPass(const lzvk::wrapper::CommandBuffer::Ptr& cmd);
-		void recordCombinePass(const lzvk::wrapper::CommandBuffer::Ptr& cmd, uint32_t imageIndex);
+		void recordCombinePass(const lzvk::wrapper::CommandBuffer::Ptr& cmd);
+		void recordToneMappingPass(const lzvk::wrapper::CommandBuffer::Ptr& cmd, uint32_t imageIndex);
 		void recordCommandBuffer(uint32_t imageIndex);
 
 		// sync
@@ -130,6 +135,7 @@ namespace lzvk::core{
 		lzvk::renderer::SSAOUniformManager::Ptr mSSAOUniformManager{ nullptr };
 		lzvk::renderer::BlurUniformManager::Ptr mBlurUniformManager{ nullptr };
 		lzvk::renderer::CombineUniformManager::Ptr mCombineUniformManager{ nullptr };
+		lzvk::renderer::ToneMappingUniformManager::Ptr mToneMappingUniformManager{ nullptr };
 
 		// pass 02 ssao
 		lzvk::renderer::Texture::Ptr mDepthTexture_SSAO{ nullptr };
@@ -153,7 +159,13 @@ namespace lzvk::core{
 		// pass 04 combine
 		lzvk::renderer::Texture::Ptr mColorTexture_Combine{ nullptr };
 		lzvk::renderer::Texture::Ptr mAOTexture_Combine{ nullptr };
+		lzvk::wrapper::Image::Ptr mHDRImage{ nullptr };
+		lzvk::wrapper::Framebuffer::Ptr mFramebuffer_HDR{ nullptr };
 		lzvk::wrapper::Pipeline::Ptr mCombinePipeline{ nullptr };
+
+		// pass 05 hdr tone mapping
+		lzvk::renderer::Texture::Ptr mHDRTexture { nullptr };
+		lzvk::wrapper::Pipeline::Ptr mToneMappingPipeline{ nullptr };
 
 		// vp matrix uniform
 		lzvk::wrapper::DescriptorSetLayout::Ptr mDescriptorSetLayout_Frame{ nullptr };
@@ -176,10 +188,16 @@ namespace lzvk::core{
 		std::vector<lzvk::wrapper::DescriptorSet::Ptr>       mDescriptorSet_BlurH{};
 		std::vector<lzvk::wrapper::DescriptorSet::Ptr>       mDescriptorSet_BlurV{};
 
-		// blur uniform
+		// combine uniform
 		lzvk::wrapper::DescriptorSetLayout::Ptr mDescriptorSetLayout_Combine{ nullptr };
 		lzvk::wrapper::DescriptorPool::Ptr      mDescriptorPool_Combine{ nullptr };
 		lzvk::wrapper::DescriptorSet::Ptr       mDescriptorSet_Combine{ nullptr };
+
+		// tone mapping uniform
+		lzvk::wrapper::DescriptorSetLayout::Ptr mDescriptorSetLayout_ToneMapping{ nullptr };
+		lzvk::wrapper::DescriptorPool::Ptr      mDescriptorPool_ToneMapping{ nullptr };
+		lzvk::wrapper::DescriptorSet::Ptr       mDescriptorSet_ToneMapping{ nullptr };
+
 
 		// scene
 		lzvk::loader::Scene    mSceneExterior;

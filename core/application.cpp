@@ -50,19 +50,13 @@ namespace lzvk::core {
 		mWidth = mSwapChain->getExtent().width;
 		mHeight = mSwapChain->getExtent().height;
 
-		// 2 create resources and frame buffer
-		// 2.1 pass 01 geometry
+		// 2 create images
 		createGeometryFramebuffer();
-		
-		// 2.2 pass 02 ssao
 		createSSAOResources();
-	
-		// 2.3 pass 03 blur
 		createBlurImages();
+		createHDRImages();
 
-		// 2.4 pass 04 combine
-
-		// 3 create scene buffer
+		// 3 create buffers
 		createSceneBuffers();
 
 		// 4 create descriptor
@@ -70,14 +64,11 @@ namespace lzvk::core {
 
 		// 5 create pipeline
 		createSkyboxPipeline();
-
 		createSceneGraphPipeline();
-
 		createSSAOPipeline();
-
 		createBlurPipelines();
-
 		createCombinePipeline();
+		createToneMappingPipeline();
 
 		// 6 create command buffers
 		createCommandBuffers();
@@ -167,6 +158,24 @@ namespace lzvk::core {
 			VK_IMAGE_ASPECT_COLOR_BIT
 		);
 
+	}
+
+	void Application::createHDRImages() {
+
+		mHDRImage = lzvk::wrapper::Image::create(
+			mDevice,
+			mWidth, mHeight,
+			VK_FORMAT_R16G16B16A16_SFLOAT,
+			VK_IMAGE_TYPE_2D,
+			VK_IMAGE_TILING_OPTIMAL,
+			VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+			VK_SAMPLE_COUNT_1_BIT,
+			VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+			VK_IMAGE_ASPECT_COLOR_BIT
+		);
+
+		mFramebuffer_HDR = lzvk::wrapper::Framebuffer::create(mDevice, mWidth, mHeight, false);
+		mFramebuffer_HDR->addColorAttachment(mHDRImage);
 	}
 
 	void Application::createSceneBuffers() {
@@ -408,6 +417,26 @@ namespace lzvk::core {
 			mDescriptorSetLayout_Combine,
 			mDescriptorPool_Combine,
 			MAX_FRAMES_IN_FLIGHT);
+
+		//
+		// ========== HDR Uniform ==========
+		//
+		mToneMappingUniformManager = lzvk::renderer::ToneMappingUniformManager::create();
+		mToneMappingUniformManager->init(mDevice);
+
+		auto hdrParams = mToneMappingUniformManager->getParams();
+
+		mDescriptorSetLayout_ToneMapping = lzvk::wrapper::DescriptorSetLayout::create(mDevice);
+		mDescriptorSetLayout_ToneMapping->build(hdrParams);
+
+		mDescriptorPool_ToneMapping = lzvk::wrapper::DescriptorPool::create(mDevice);
+		mDescriptorPool_ToneMapping->build(hdrParams, MAX_FRAMES_IN_FLIGHT);
+
+		mDescriptorSet_ToneMapping = lzvk::wrapper::DescriptorSet::create(
+			mDevice, hdrParams,
+			mDescriptorSetLayout_ToneMapping,
+			mDescriptorPool_ToneMapping,
+			MAX_FRAMES_IN_FLIGHT);
 	}
 
 	void Application::applyCommonPipelineState(const lzvk::wrapper::Pipeline::Ptr& pipeline, bool enableDepthWrite, VkCullModeFlagBits cullMode, PipelineType type) {
@@ -478,10 +507,8 @@ namespace lzvk::core {
 					mSceneMesh->getDescriptorSetLayout_Normal()->getLayout(),
 					mSceneMesh->getDescriptorSetLayout_Opacity()->getLayout(),
 				};
-
-
 			}
-									 break;
+								break;
 			case PipelineType::Skybox: {
 				pipeline->mSetLayoutsStorage = {
 					mDescriptorSetLayout_Frame->getLayout(),
@@ -489,7 +516,6 @@ namespace lzvk::core {
 				};
 			}
 								 break;
-
 			case PipelineType::Combine: {
 				
 				pipeline->mSetLayoutsStorage = {
@@ -504,8 +530,14 @@ namespace lzvk::core {
 				pipeline->mPushConstantRanges = { combinePcRange };
 
 			}
-		
 				break;
+			case PipelineType::ToneMapping: {
+
+				pipeline->mSetLayoutsStorage = {
+					mDescriptorSetLayout_ToneMapping->getLayout()
+				};
+			}
+			 break;
 		}
 
 		pipeline->mLayoutState.setLayoutCount = static_cast<uint32_t>(pipeline->mSetLayoutsStorage.size());
@@ -597,7 +629,7 @@ namespace lzvk::core {
 
 		mSSAOPipeline = lzvk::wrapper::ComputePipeline::create(mDevice);
 
-		auto ssaoShader = lzvk::wrapper::Shader::create(mDevice, "shaders/ssao/ssao_comp.spv", VK_SHADER_STAGE_COMPUTE_BIT, "main");
+		auto ssaoShader = lzvk::wrapper::Shader::create(mDevice, "shaders/post_processing/ssao/ssao_comp.spv", VK_SHADER_STAGE_COMPUTE_BIT, "main");
 		mSSAOPipeline->setShader(ssaoShader);
 		mSSAOPipeline->setDescriptorSetLayouts({ mDescriptorSetLayout_SSAO->getLayout() });
 		mSSAOPipeline->build();
@@ -606,7 +638,7 @@ namespace lzvk::core {
 	void Application::createBlurPipelines() {
 
 		// Load shader module (shared for both)
-		auto blurShader = lzvk::wrapper::Shader::create(mDevice, "shaders/ssao/blur_comp.spv", VK_SHADER_STAGE_COMPUTE_BIT, "main");
+		auto blurShader = lzvk::wrapper::Shader::create(mDevice, "shaders/post_processing/ssao/blur_comp.spv", VK_SHADER_STAGE_COMPUTE_BIT, "main");
 
 		const uint32_t kSpecHorizontal = 1;
 		const uint32_t kSpecVertical = 0;
@@ -631,18 +663,18 @@ namespace lzvk::core {
 		// 1 create pipeline
 		mCombinePipeline = lzvk::wrapper::Pipeline::create(mDevice);
 
-		mCombinePipeline->setColorAttachmentFormats({ mSwapChain->getFormat() });
+		mCombinePipeline->setColorAttachmentFormats({ mHDRImage->getFormat() });
 
-		VkFormat depthFormat = mSwapChain->getDepthImageFormat();
-		mCombinePipeline->setDepthAttachmentFormat(depthFormat);
-		if (depthFormat == VK_FORMAT_D32_SFLOAT_S8_UINT || depthFormat == VK_FORMAT_D24_UNORM_S8_UINT) {
-			mCombinePipeline->setStencilAttachmentFormat(depthFormat);
-		}
+		//VkFormat depthFormat = mHDRImage->getFormat();
+		//mCombinePipeline->setDepthAttachmentFormat(depthFormat);
+		//if (depthFormat == VK_FORMAT_D32_SFLOAT_S8_UINT || depthFormat == VK_FORMAT_D24_UNORM_S8_UINT) {
+		//	mCombinePipeline->setStencilAttachmentFormat(depthFormat);
+		//}
 
 		// 2.set shader group
 		std::vector<lzvk::wrapper::Shader::Ptr> shaderGroup{};
-		shaderGroup.push_back(lzvk::wrapper::Shader::create(mDevice, "shaders/ssao/quad_flip_vs.spv", VK_SHADER_STAGE_VERTEX_BIT, "main"));
-		shaderGroup.push_back(lzvk::wrapper::Shader::create(mDevice, "shaders/ssao/combine_fs.spv", VK_SHADER_STAGE_FRAGMENT_BIT, "main"));
+		shaderGroup.push_back(lzvk::wrapper::Shader::create(mDevice, "shaders/post_processing/quad_flip_vs.spv", VK_SHADER_STAGE_VERTEX_BIT, "main"));
+		shaderGroup.push_back(lzvk::wrapper::Shader::create(mDevice, "shaders/post_processing/ssao/combine_fs.spv", VK_SHADER_STAGE_FRAGMENT_BIT, "main"));
 		mCombinePipeline->setShaderGroup(shaderGroup);
 
 		// 3.vertex
@@ -661,6 +693,43 @@ namespace lzvk::core {
 
 		// 8. Build Pipeline
 		mCombinePipeline->build();
+	}
+
+	void Application::createToneMappingPipeline() {
+
+		mToneMappingPipeline = lzvk::wrapper::Pipeline::create(mDevice);
+
+		mToneMappingPipeline->setColorAttachmentFormats({ mSwapChain->getFormat() });
+
+		VkFormat depthFormat = mSwapChain->getDepthImageFormat();
+		mToneMappingPipeline->setDepthAttachmentFormat(depthFormat);
+		if (depthFormat == VK_FORMAT_D32_SFLOAT_S8_UINT || depthFormat == VK_FORMAT_D24_UNORM_S8_UINT) {
+			mToneMappingPipeline->setStencilAttachmentFormat(depthFormat);
+		}
+
+		// 2.set shader group
+		std::vector<lzvk::wrapper::Shader::Ptr> shaderGroup{};
+		shaderGroup.push_back(lzvk::wrapper::Shader::create(mDevice, "shaders/post_processing/quad_flip_vs.spv", VK_SHADER_STAGE_VERTEX_BIT, "main"));
+		shaderGroup.push_back(lzvk::wrapper::Shader::create(mDevice, "shaders/post_processing/hdr/tone_mapping_fs.spv", VK_SHADER_STAGE_FRAGMENT_BIT, "main"));
+		mToneMappingPipeline->setShaderGroup(shaderGroup);
+
+		// 3.vertex
+		mToneMappingPipeline->mVertexInputState.vertexBindingDescriptionCount = 0;
+		mToneMappingPipeline->mVertexInputState.pVertexBindingDescriptions = nullptr;
+		mToneMappingPipeline->mVertexInputState.vertexAttributeDescriptionCount = 0;
+		mToneMappingPipeline->mVertexInputState.pVertexAttributeDescriptions = nullptr;
+
+		// 4. Input assembly
+		mToneMappingPipeline->mAssemblyState.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
+		mToneMappingPipeline->mAssemblyState.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
+		mToneMappingPipeline->mAssemblyState.primitiveRestartEnable = VK_FALSE;
+
+		// 5. common state
+		applyCommonPipelineState(mToneMappingPipeline, false, VK_CULL_MODE_NONE, PipelineType::ToneMapping);
+
+		// 8. Build Pipeline
+		mToneMappingPipeline->build();
+
 	}
 
 	void Application::createCommandBuffers() {
@@ -858,12 +927,12 @@ namespace lzvk::core {
 		mFinalAOImage = inputTex->getImage();
 	}
 
-	void Application::recordCombinePass(const lzvk::wrapper::CommandBuffer::Ptr& cmd, uint32_t imageIndex) {
+	void Application::recordCombinePass(const lzvk::wrapper::CommandBuffer::Ptr& cmd) {
 		
 		// 1. Transition render target
 		cmd->transitionImageLayout(
-			mSwapChain->getImage(imageIndex),
-			mSwapChain->getFormat(),
+			mHDRImage->getImage(),
+			mHDRImage->getFormat(),
 			VK_IMAGE_LAYOUT_UNDEFINED,
 			VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
 			VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
@@ -901,7 +970,7 @@ namespace lzvk::core {
 
 
 		// 2. Begin render
-		cmd->beginRendering(mSwapChain, imageIndex);
+		cmd->beginRendering(mFramebuffer_HDR);
 
 		// --- Dynamic State ---
 		VkViewport viewport{};
@@ -937,6 +1006,65 @@ namespace lzvk::core {
 
 	}
 
+	void Application::recordToneMappingPass(const lzvk::wrapper::CommandBuffer::Ptr& cmd, uint32_t imageIndex) {
+
+		// 1. Transition render target
+		cmd->transitionImageLayout(
+			mHDRImage->getImage(),
+			mHDRImage->getFormat(),
+			VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+			VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+			VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+			VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT
+		);
+
+
+		cmd->transitionImageLayout(
+			mSwapChain->getImage(imageIndex),
+			mSwapChain->getFormat(),
+			VK_IMAGE_LAYOUT_UNDEFINED,
+			VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+			VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
+			VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT
+		);
+
+
+		if (!mHDRTexture) {
+			mHDRTexture = renderer::Texture::create(mDevice, mHDRImage);
+		}
+
+		mToneMappingUniformManager->update(mDescriptorSet_ToneMapping, mHDRTexture, mCurrentFrame);
+
+		// 2. Begin render
+		cmd->beginRendering(mSwapChain, imageIndex);
+
+		// --- Dynamic State ---
+		VkViewport viewport{};
+		viewport.x = 0.0f;
+		viewport.y = 0.0f;
+		viewport.width = static_cast<float>(mWidth);
+		viewport.height = static_cast<float>(mHeight);
+		viewport.minDepth = 0.0f;
+		viewport.maxDepth = 1.0f;
+		cmd->setViewport(0, viewport);
+
+		VkRect2D scissor{};
+		scissor.offset = { 0, 0 };
+		scissor.extent = { mWidth, mHeight };
+		cmd->setScissor(0, scissor);
+
+		// 3. Bind pipeline + descriptor sets
+		cmd->bindGraphicPipeline(mToneMappingPipeline->getPipeline());
+		cmd->bindDescriptorSet(VK_PIPELINE_BIND_POINT_GRAPHICS, mToneMappingPipeline->getLayout(), mDescriptorSet_ToneMapping->getDescriptorSet(mCurrentFrame), 0);
+
+		// 4. Draw fullscreen triangle
+		cmd->draw(3);
+
+		// 5. End render
+		cmd->endRendering();
+
+	}
+
 	void Application::recordCommandBuffer(uint32_t imageIndex) {
 
 		mCommandBuffers[mCurrentFrame]->begin();
@@ -947,7 +1075,9 @@ namespace lzvk::core {
 
 		recordBlurPass(mCommandBuffers[mCurrentFrame]);
 
-		recordCombinePass(mCommandBuffers[mCurrentFrame], imageIndex);
+		recordCombinePass(mCommandBuffers[mCurrentFrame]);
+
+		recordToneMappingPass(mCommandBuffers[mCurrentFrame], imageIndex);
 
 		mCommandBuffers[mCurrentFrame]->transitionImageLayout(
 			mSwapChain->getImage(imageIndex),

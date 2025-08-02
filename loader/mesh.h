@@ -49,6 +49,7 @@ namespace lzvk::loader {
         std::vector<std::string> diffuseTextureFiles;
         std::vector<std::string> emissiveTextureFiles;
         std::vector<std::string> normalTextureFiles;
+        std::vector<std::string> opacityTextureFiles;
         std::vector<std::string> occlusionTextureFiles;
     };
 

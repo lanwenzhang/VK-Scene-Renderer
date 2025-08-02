@@ -107,18 +107,48 @@ namespace lzvk::wrapper {
 			return false;
 		}
 
+		// 4 Prepare feature/property chains
+		VkPhysicalDeviceDepthStencilResolveProperties resolveProps{};
+		resolveProps.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DEPTH_STENCIL_RESOLVE_PROPERTIES;
+
 		VkPhysicalDeviceDescriptorIndexingFeatures indexingFeaturesCheck{};
 		indexingFeaturesCheck.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_INDEXING_FEATURES;
-		indexingFeaturesCheck.pNext = nullptr;
+		indexingFeaturesCheck.pNext = &resolveProps;
 
 		VkPhysicalDeviceBufferDeviceAddressFeatures bufferAddressFeatureCheck{};
 		bufferAddressFeatureCheck.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_BUFFER_DEVICE_ADDRESS_FEATURES;
 		bufferAddressFeatureCheck.pNext = &indexingFeaturesCheck;
 
+		VkPhysicalDeviceVulkan11Features features11{};
+		features11.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_1_FEATURES;
+		features11.pNext = &bufferAddressFeatureCheck;
+
+		VkPhysicalDeviceVulkan13Features features13{};
+		features13.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES;
+		features13.pNext = &features11;
+
 		VkPhysicalDeviceFeatures2 features2{};
 		features2.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2;
-		features2.pNext = &bufferAddressFeatureCheck;
+		features2.pNext = &features13;
 		vkGetPhysicalDeviceFeatures2(device, &features2);
+
+		VkPhysicalDeviceProperties2 props2{};
+		props2.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2;
+		props2.pNext = &resolveProps;
+		vkGetPhysicalDeviceProperties2(device, &props2);
+
+
+	
+		if (resolveProps.supportedDepthResolveModes & VK_RESOLVE_MODE_SAMPLE_ZERO_BIT) {
+			mDepthResolveMode = VK_RESOLVE_MODE_SAMPLE_ZERO_BIT;
+		}
+		else {
+			std::cerr << "Warning: No supported depth resolve mode.\n";
+		}
+
+		if (mDepthResolveMode != VK_RESOLVE_MODE_NONE) {
+			std::cout << "Selected depth resolve mode: " << resolveModeToString(mDepthResolveMode) << std::endl;
+		}
 
 		bool supported =
 			deviceProp.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU &&
@@ -136,7 +166,6 @@ namespace lzvk::wrapper {
 		}
 
 		return supported;
-
 	}
 
 	void Device::initQueueFamilies(VkPhysicalDevice device) {
@@ -200,17 +229,12 @@ namespace lzvk::wrapper {
 		}
 	
 		// 2 Fill in device create info
-		// 2.1 Vulkan 1.1 features
-		VkPhysicalDeviceVulkan11Features features11{};
-		features11.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_1_FEATURES;
-		features11.shaderDrawParameters = VK_TRUE;
+		VkPhysicalDeviceVulkan13Features features13{};
+		features13.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES;
+		features13.dynamicRendering = VK_TRUE; 
+		features13.pNext = nullptr;
 
-		// 2.2 Device address features
-		VkPhysicalDeviceBufferDeviceAddressFeatures bufferDeviceAddressFeatures{};
-		bufferDeviceAddressFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_BUFFER_DEVICE_ADDRESS_FEATURES;
-		bufferDeviceAddressFeatures.bufferDeviceAddress = VK_TRUE;
-
-		// 2.3 Descriptor indexing features
+		// 2.2 Descriptor indexing features
 		VkPhysicalDeviceDescriptorIndexingFeatures indexingFeatures{};
 		indexingFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_INDEXING_FEATURES;
 		indexingFeatures.runtimeDescriptorArray = VK_TRUE;
@@ -218,21 +242,29 @@ namespace lzvk::wrapper {
 		indexingFeatures.descriptorBindingPartiallyBound = VK_TRUE;
 		indexingFeatures.descriptorBindingVariableDescriptorCount = VK_TRUE;
 		indexingFeatures.descriptorBindingSampledImageUpdateAfterBind = VK_TRUE;
+		indexingFeatures.pNext = &features13;
 
-		indexingFeatures.pNext = nullptr;
+		// 2.3 Buffer device address
+		VkPhysicalDeviceBufferDeviceAddressFeatures bufferDeviceAddressFeatures{};
+		bufferDeviceAddressFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_BUFFER_DEVICE_ADDRESS_FEATURES;
+		bufferDeviceAddressFeatures.bufferDeviceAddress = VK_TRUE;
 		bufferDeviceAddressFeatures.pNext = &indexingFeatures;
+
+		// 2.4 Vulkan 1.1 features
+		VkPhysicalDeviceVulkan11Features features11{};
+		features11.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_1_FEATURES;
+		features11.shaderDrawParameters = VK_TRUE;
 		features11.pNext = &bufferDeviceAddressFeatures;
 
-		// 2.4 Base features2
+		// 2.5 Base features2
 		VkPhysicalDeviceFeatures2 deviceFeatures{};
 		deviceFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2;
 		deviceFeatures.features.shaderInt64 = VK_TRUE;
 		deviceFeatures.features.samplerAnisotropy = VK_TRUE;
 		deviceFeatures.features.multiDrawIndirect = VK_TRUE;
-
-		// deviceCreateInfo
 		deviceFeatures.pNext = &features11;
 
+		// deviceCreateInfo
 		VkDeviceCreateInfo deviceCreateInfo{};
 		deviceCreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
 		deviceCreateInfo.pQueueCreateInfos = queueCreateInfos.data();
@@ -270,7 +302,6 @@ namespace lzvk::wrapper {
 		vkGetDeviceQueue(mDevice, mPresentQueueFamily.value(), 0, &mPresentQueue);
 		vkGetDeviceQueue(mDevice, mComputeQueueFamily.value(), 0, &mComputeQueue);
 	}
-
 
 	PFN_vkGetBufferDeviceAddress Device::getBufferDeviceAddressFunction() const {
 		

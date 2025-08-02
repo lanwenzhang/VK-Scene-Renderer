@@ -1,0 +1,56 @@
+#version 450
+
+layout(local_size_x = 16, local_size_y = 16) in;
+
+layout(binding = 0) uniform sampler2D uDepth;
+layout(binding = 1) uniform sampler2D uRotation;
+layout(binding = 2, rgba8) uniform writeonly image2D uOutput;
+
+layout(push_constant) uniform PushConstants {
+    float zNear;
+    float zFar;
+    float radius;
+    float attScale;
+    float distScale;
+} pc;
+
+const vec3 offsets[8] = vec3[8](
+  vec3(-0.5, -0.5, -0.5), vec3( 0.5, -0.5, -0.5),
+  vec3(-0.5,  0.5, -0.5), vec3( 0.5,  0.5, -0.5),
+  vec3(-0.5, -0.5,  0.5), vec3( 0.5, -0.5,  0.5),
+  vec3(-0.5,  0.5,  0.5), vec3( 0.5,  0.5,  0.5)
+);
+
+float scaleZ(float d) {
+    return (pc.zFar * pc.zNear) / (d * (pc.zFar - pc.zNear) - pc.zFar);
+}
+
+void main() {
+
+    const vec2 size = textureSize(uDepth, 0).xy;
+    const vec2 xy = gl_GlobalInvocationID.xy;
+    const vec2 uv = (gl_GlobalInvocationID.xy + vec2(0.5)) / size;
+
+    if (xy.x > size.x || xy.y > size.y) return;
+
+    const float Z = scaleZ(texture(uDepth, uv).x);
+    vec3 plane = texture(uRotation, xy / 4.0).xyz - vec3(1.0);
+
+    float att = 0.0;
+    for (int i = 0; i < 8; i++) {
+
+        vec3 rSample = reflect(offsets[i], plane);
+        vec2 offsetUV = uv + pc.radius * rSample.xy / Z;
+        float zSample = scaleZ(texture(uDepth, offsetUV).r);
+        float dist = max(zSample - Z, 0.0) / pc.distScale;
+        float occl = 15.0 * max(dist * (2.0 - dist), 0.0);
+        att += 1.0 / (1.0 + occl * occl);
+    }
+
+    att = clamp(att * att / 64.0 + 0.45, 0.0, 1.0) * pc.attScale;
+
+    imageStore(uOutput, ivec2(xy), vec4(vec3(att), 1.0));
+
+
+}
+

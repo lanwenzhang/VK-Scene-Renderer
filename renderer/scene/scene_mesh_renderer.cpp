@@ -158,6 +158,26 @@ namespace lzvk::renderer {
             1
         );
 
+        //
+        // ========== OPACITY TEXTURE SET ==========
+        //
+
+        auto opacityParams = mSceneTextureManager->getOpacityParams();
+
+        mDescriptorSetLayout_Opacity = lzvk::wrapper::DescriptorSetLayout::create(mDevice);
+        mDescriptorSetLayout_Opacity->build(opacityParams);
+
+        mDescriptorPool_Opacity = lzvk::wrapper::DescriptorPool::create(mDevice);
+        mDescriptorPool_Opacity->build(opacityParams, 1);
+
+        mDescriptorSet_Opacity = lzvk::wrapper::DescriptorSet::create(
+            mDevice,
+            opacityParams,
+            mDescriptorSetLayout_Opacity,
+            mDescriptorPool_Opacity,
+            1
+        );
+
 
 
         //
@@ -189,26 +209,6 @@ namespace lzvk::renderer {
         }
 
         mDrawCount = static_cast<uint32_t>(drawCommands.size());
-
-        //for (size_t i = 0; i < scene.drawDataArray.size(); ++i) {
-        //    const lzvk::loader::DrawData& dd = scene.drawDataArray[i];
-        //    const lzvk::loader::Mesh& mesh = meshData.meshes[scene.meshForNode[dd.transformId]];
-        //    const glm::mat4& transform = scene.globalTransform[dd.transformId];
-        //    const lzvk::loader::Material& mat = meshData.materials[dd.materialId];
-
-        //    glm::vec3 translation = glm::vec3(transform[3]);
-        //    float scaleX = glm::length(glm::vec3(transform[0]));
-
-        //    printf("[Draw %zu] meshID = %u, matID = %u, indexCount = %u, trans = (%.2f, %.2f, %.2f), scale = %.5f, baseColorTex = %d\n",
-        //        i,
-        //        scene.meshForNode[dd.transformId],
-        //        dd.materialId,
-        //        mesh.indexCount,
-        //        translation.x, translation.y, translation.z,
-        //        scaleX,
-        //        mat.baseColorTexture
-        //    );
-        //}
 
 
         mIndirectBuffer = lzvk::wrapper::Buffer::createStorageBuffer(

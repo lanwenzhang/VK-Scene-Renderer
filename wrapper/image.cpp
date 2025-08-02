@@ -26,6 +26,7 @@ namespace lzvk::wrapper {
 
 	}
 
+
 	Image::Image(const Device::Ptr& device, const int& width, const int& height, const VkFormat& format,
 		const VkImageType& imageType, const VkImageTiling& tiling, const VkImageUsageFlags& usage,
 		const VkSampleCountFlagBits& sample, const VkMemoryPropertyFlags& properties, const VkImageAspectFlags& aspectFlags,
@@ -101,6 +102,16 @@ namespace lzvk::wrapper {
 			throw std::runtime_error("Error: failed to create image view");
 		}
 	}
+
+
+	Image::Image(const Device::Ptr& device, VkImage image, VkImageView imageView, VkFormat format) {
+
+		mDevice = device;
+		mImage = image;
+		mImageView = imageView;
+		mFormat = format;
+	}
+
 
 	Image::~Image() {
 

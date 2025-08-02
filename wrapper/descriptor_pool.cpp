@@ -20,42 +20,61 @@ namespace lzvk::wrapper {
 		uint32_t uniformBufferCount = 0;
 		uint32_t textureCount = 0;
 		uint32_t storageBufferCount = 0;
+		uint32_t storageImageCount = 0;
 
 		for (const auto& param : params) {
-			if (param->mDescriptorType == VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER) {
-				uniformBufferCount += param->mCount;
-			}
-			if (param->mDescriptorType == VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER) {
-				textureCount += param->mCount;
-			}
-			if (param->mDescriptorType == VK_DESCRIPTOR_TYPE_STORAGE_BUFFER) {
-				storageBufferCount += param->mCount;
-			}
+			if (!param) continue;
 
+			switch (param->mDescriptorType) {
+			case VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER:
+				uniformBufferCount += param->mCount;
+				break;
+
+			case VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER:
+				textureCount += param->mCount;
+				break;
+
+			case VK_DESCRIPTOR_TYPE_STORAGE_BUFFER:
+				storageBufferCount += param->mCount;
+				break;
+
+			case VK_DESCRIPTOR_TYPE_STORAGE_IMAGE:
+				storageImageCount += param->mCount;
+				break;
+
+			default:
+				std::cerr << "[DescriptorPool] Warning: Unsupported descriptor type "
+					<< param->mDescriptorType << std::endl;
+				break;
+			}
 		}
 
 		// 2 Pool size
 		std::vector<VkDescriptorPoolSize> poolSizes{};
 
 		if (uniformBufferCount > 0) {
-			VkDescriptorPoolSize uniformBufferSize{};
-			uniformBufferSize.type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-			uniformBufferSize.descriptorCount = uniformBufferCount * frameCount;
-			poolSizes.push_back(uniformBufferSize);
+			poolSizes.push_back({
+				VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+				uniformBufferCount * frameCount
+				});
 		}
-
 		if (textureCount > 0) {
-			VkDescriptorPoolSize textureSize{};
-			textureSize.type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-			textureSize.descriptorCount = textureCount * frameCount;
-			poolSizes.push_back(textureSize);
+			poolSizes.push_back({
+				VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+				textureCount * frameCount
+				});
 		}
-
 		if (storageBufferCount > 0) {
-			VkDescriptorPoolSize storageSize{};
-			storageSize.type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
-			storageSize.descriptorCount = storageBufferCount * frameCount;
-			poolSizes.push_back(storageSize);
+			poolSizes.push_back({
+				VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+				storageBufferCount * frameCount
+				});
+		}
+		if (storageImageCount > 0) {
+			poolSizes.push_back({
+				VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
+				storageImageCount * frameCount
+				});
 		}
 
 		if (poolSizes.empty()) {

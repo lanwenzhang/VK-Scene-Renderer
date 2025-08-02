@@ -5,6 +5,7 @@
 #include "device.h"
 #include "render_pass.h"
 #include "image.h"
+#include "framebuffer.h"
 
 namespace lzvk::wrapper {
 
@@ -32,24 +33,25 @@ namespace lzvk::wrapper {
 		SwapChainSupportInfo querySwapChainSupportInfo();
 
 		VkSurfaceFormatKHR chooseSurfaceFormat(const std::vector<VkSurfaceFormatKHR>& availableFormats);
-
 		VkPresentModeKHR chooseSurfacePresentMode(const std::vector<VkPresentModeKHR>& availablePresentModes);
-
 		VkExtent2D chooseExtent(const VkSurfaceCapabilitiesKHR & capabilities);
 
-		void createFrameBuffers(const RenderPass::Ptr &renderPass);
-
-		[[nodiscard]] auto getFormat() const { return mSwapChainFormat; }
-		[[nodiscard]] auto getImageCount() const { return mImageCount; }
 		[[nodiscard]] auto getSwapChain() const { return mSwapChain; }
-		[[nodiscard]] auto getFrameBuffer(const int index) const { return mSwapChainFrameBuffers[index]; }
 		[[nodiscard]] auto getExtent() const { return mSwapChainExtent; }
+		[[nodiscard]] auto getFormat() const { return mSwapChainFormat; }
 
+		[[nodiscard]] auto getImageCount() const { return mImageCount; }
+		[[nodiscard]] auto getImage(uint32_t index) const { return mSwapChainImages[index]; }
+		[[nodiscard]] auto getImageView(uint32_t index) const { return mSwapChainImageViews[index]; }
+
+		[[nodiscard]] auto getDepthImage(uint32_t index) const { return mDepthImages[index]->getImage(); }
+		[[nodiscard]] auto getDepthImageFormat() const { return mDepthImages[0]->getFormat(); }
+		[[nodiscard]] auto getDepthImageView(uint32_t index) const { return mDepthImages[index]->getImageView(); }
+	
 
 	private:
 
 		VkImageView createImageView(VkImage image, VkFormat format, VkImageAspectFlags aspectFlags, uint32_t mipLevels = 1);
-
 
 	private:
 
@@ -60,10 +62,10 @@ namespace lzvk::wrapper {
 		// Swap chain images
 		uint32_t mImageCount{ 0 };
 		std::vector<VkImage> mSwapChainImages{};
-		std::vector<VkImageView> mSwapChainImageViews{}; // Manage swap chain image
+		std::vector<VkImageView> mSwapChainImageViews{};
 		std::vector<Image::Ptr> mDepthImages{};
 		std::vector<Image::Ptr> mMultiSampleImages{}; 
-		std::vector<VkFramebuffer> mSwapChainFrameBuffers{};
+		std::vector<Framebuffer::Ptr> mFramebuffers{};
 
 		Device::Ptr mDevice{ nullptr };
 		lzvk::core::Window::Ptr mWindow{ nullptr };

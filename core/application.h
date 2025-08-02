@@ -20,6 +20,7 @@
 #include "../wrapper/descriptor_pool.h"
 #include "../wrapper/description.h"
 #include "../wrapper/descriptor_set.h"
+#include "../wrapper/framebuffer.h"
 #include "../wrapper/image.h"
 #include "../wrapper/compute_pipeline.h"
 #include "../wrapper/compute_pass_instancing.h"
@@ -34,6 +35,9 @@
 #include "../renderer/uniform/skybox_uniform_manager.h"
 #include "../renderer/uniform/scene_texture_manager.h"
 #include "../renderer/uniform/draw_data_uniform_manager.h"
+#include "../renderer/uniform/ssao_uniform_manager.h"
+#include "../renderer/uniform/blur_uniform_manager.h"
+#include "../renderer/uniform/combine_uniform_manager.h"
 #include "../renderer/texture/texture.h"
 #include "../renderer/texture/cube_map_texture.h"
 #include "../renderer/camera/camera.h"
@@ -64,22 +68,46 @@ namespace lzvk::core{
 
 	private:
 
-		void createRenderPass();
+		// framebuffer
+		void createGeometryFramebuffer();
+		void createSSAOResources();
+		void createBlurImages();
+
+		// scene buffer
+		void createSceneBuffers();
+
+		// descriptor
 		void createDescriptorSets();
-		void applyCommonPipelineState(const lzvk::wrapper::Pipeline::Ptr& pipeline, bool enableDepthWrite, VkCullModeFlagBits cullMode, bool isSceneGraph);
+
+		// pipelines
+		void applyCommonPipelineState(const lzvk::wrapper::Pipeline::Ptr& pipeline, bool enableDepthWrite, VkCullModeFlagBits cullMode, PipelineType type);
 		void createSkyboxPipeline();
 		void createSceneGraphPipeline();
+		void createSSAOPipeline();
+		void createBlurPipelines();
+		void createCombinePipeline();
+
+		// command buffers
 		void createCommandBuffers();
+		void transitionGeometryImages(const lzvk::wrapper::CommandBuffer::Ptr& cmd);
+		void recordGeometryPass(const lzvk::wrapper::CommandBuffer::Ptr& cmd);
+		void recordSSAOPass(const lzvk::wrapper::CommandBuffer::Ptr& cmd);
+		void recordBlurPass(const lzvk::wrapper::CommandBuffer::Ptr& cmd);
+		void recordCombinePass(const lzvk::wrapper::CommandBuffer::Ptr& cmd, uint32_t imageIndex);
 		void recordCommandBuffer(uint32_t imageIndex);
+
+		// sync
 		void createSyncObjects();
 
 	private:
 
-		unsigned int mWidth{ 800 };
-		unsigned int mHeight{ 600 };
+		unsigned int mWidth{ 1920 };
+		unsigned int mHeight{ 1080 };
 
 		int mCurrentFrame{ 0 };
 		const int MAX_FRAMES_IN_FLIGHT{ 2 };
+		int mBlurPassCount{ 2 };
+
 
 		lzvk::core::Window::Ptr mWindow{ nullptr };
 		lzvk::wrapper::Instance::Ptr mInstance{ nullptr };
@@ -88,29 +116,72 @@ namespace lzvk::core{
 		lzvk::wrapper::CommandPool::Ptr mCommandPool{ nullptr };
 		lzvk::wrapper::SwapChain::Ptr mSwapChain{ nullptr };
 
-		lzvk::wrapper::RenderPass::Ptr mRenderPass{ nullptr };
+		// pass 01 geometry
+		lzvk::wrapper::Framebuffer::Ptr mFramebuffer_Geometry{ nullptr };
+		lzvk::wrapper::Image::Ptr mColorImage_Geometry{ nullptr };
+		lzvk::wrapper::Image::Ptr mDepthImage_Geometry{ nullptr };
+
 		lzvk::wrapper::Pipeline::Ptr mSkyboxPipeline{ nullptr };
 		lzvk::wrapper::Pipeline::Ptr mSceneGraphPipeline{ nullptr };
 
-		std::vector<lzvk::wrapper::CommandBuffer::Ptr> mCommandBuffers{};
-		std::vector<lzvk::wrapper::Semaphore::Ptr> mImageAvailableSemaphores{};
-		std::vector<lzvk::wrapper::Semaphore::Ptr> mRenderFinishedSemaphores{};
-		std::vector<lzvk::wrapper::Fence::Ptr> mInFlightFences{};
-		
 		lzvk::renderer::SceneMeshRenderer::Ptr mSceneMesh{ nullptr };
 		lzvk::renderer::FrameUniformManager::Ptr mFrameUniformManager{ nullptr };
 		lzvk::renderer::SkyboxUniformManager::Ptr mSkyboxUniformManager{ nullptr };
+		lzvk::renderer::SSAOUniformManager::Ptr mSSAOUniformManager{ nullptr };
+		lzvk::renderer::BlurUniformManager::Ptr mBlurUniformManager{ nullptr };
+		lzvk::renderer::CombineUniformManager::Ptr mCombineUniformManager{ nullptr };
 
-		// Frame Uniform (per-frame)
+		// pass 02 ssao
+		lzvk::renderer::Texture::Ptr mDepthTexture_SSAO{ nullptr };
+		lzvk::renderer::Texture::Ptr mRotationTexture{ nullptr };
+		lzvk::wrapper::Image::Ptr mAOImage_SSAO{ nullptr };
+		lzvk::wrapper::ComputePipeline::Ptr mSSAOPipeline{ nullptr };
+
+		// pass 03 blur
+		lzvk::wrapper::Image::Ptr mAOImage_BlurPing{ nullptr };
+		lzvk::wrapper::Image::Ptr mAOImage_BlurPong{ nullptr };
+		lzvk::wrapper::Image::Ptr mFinalAOImage{ nullptr };
+
+		lzvk::renderer::Texture::Ptr mDepthTexture_Blur{ nullptr };
+		lzvk::renderer::Texture::Ptr mAOTexture_SSAO{ nullptr };
+		lzvk::renderer::Texture::Ptr mAOTexture_BlurPing{ nullptr };
+		lzvk::renderer::Texture::Ptr mAOTexture_BlurPong{ nullptr };
+
+		lzvk::wrapper::ComputePipeline::Ptr mBlurPipelineH{ nullptr };
+		lzvk::wrapper::ComputePipeline::Ptr mBlurPipelineV{ nullptr };
+
+		// pass 04 combine
+		lzvk::renderer::Texture::Ptr mColorTexture_Combine{ nullptr };
+		lzvk::renderer::Texture::Ptr mAOTexture_Combine{ nullptr };
+		lzvk::wrapper::Pipeline::Ptr mCombinePipeline{ nullptr };
+
+		// vp matrix uniform
 		lzvk::wrapper::DescriptorSetLayout::Ptr mDescriptorSetLayout_Frame{ nullptr };
 		lzvk::wrapper::DescriptorPool::Ptr      mDescriptorPool_Frame{ nullptr };
 		lzvk::wrapper::DescriptorSet::Ptr       mDescriptorSet_Frame{ nullptr };
 
-		// Skybox 
+		// sky box uniform
 		lzvk::wrapper::DescriptorSetLayout::Ptr mDescriptorSetLayout_Skybox{ nullptr };
 		lzvk::wrapper::DescriptorPool::Ptr      mDescriptorPool_Skybox{ nullptr };
 		lzvk::wrapper::DescriptorSet::Ptr       mDescriptorSet_Skybox{ nullptr };
 
+		// ssao uniform
+		lzvk::wrapper::DescriptorSetLayout::Ptr mDescriptorSetLayout_SSAO{ nullptr };
+		lzvk::wrapper::DescriptorPool::Ptr      mDescriptorPool_SSAO{ nullptr };
+		lzvk::wrapper::DescriptorSet::Ptr       mDescriptorSet_SSAO{ nullptr };
+
+		// blur uniform
+		lzvk::wrapper::DescriptorSetLayout::Ptr mDescriptorSetLayout_Blur{ nullptr };
+		lzvk::wrapper::DescriptorPool::Ptr      mDescriptorPool_Blur{ nullptr };
+		std::vector<lzvk::wrapper::DescriptorSet::Ptr>       mDescriptorSet_BlurH{};
+		std::vector<lzvk::wrapper::DescriptorSet::Ptr>       mDescriptorSet_BlurV{};
+
+		// blur uniform
+		lzvk::wrapper::DescriptorSetLayout::Ptr mDescriptorSetLayout_Combine{ nullptr };
+		lzvk::wrapper::DescriptorPool::Ptr      mDescriptorPool_Combine{ nullptr };
+		lzvk::wrapper::DescriptorSet::Ptr       mDescriptorSet_Combine{ nullptr };
+
+		// scene
 		lzvk::loader::Scene    mSceneExterior;
 		lzvk::loader::MeshData mMeshDataExterior;
 
@@ -122,5 +193,10 @@ namespace lzvk::core{
 
 		lzvk::renderer::Camera mCamera;
 		VPMatrices mVPMatrices;
+
+		std::vector<lzvk::wrapper::CommandBuffer::Ptr> mCommandBuffers{};
+		std::vector<lzvk::wrapper::Semaphore::Ptr> mImageAvailableSemaphores{};
+		std::vector<lzvk::wrapper::Semaphore::Ptr> mRenderFinishedSemaphores{};
+		std::vector<lzvk::wrapper::Fence::Ptr> mInFlightFences{};
 	};
 }

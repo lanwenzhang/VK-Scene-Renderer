@@ -276,7 +276,7 @@ namespace lzvk::tools {
 
         const uint32_t vertexStride = 44;  // float[11]
         const uint32_t indexOffset = static_cast<uint32_t>(a.indexData.size());
-        const uint32_t vertexOffset = static_cast<uint32_t>(a.vertexData.size()) / vertexStride;
+        const uint32_t vertexOffset = static_cast<uint32_t>(a.vertexData.size()) / (sizeof(float) * 11);
 
         // ---- Step 1:  a index/vertex/mesh ----
         out.indexData = a.indexData;
@@ -300,24 +300,6 @@ namespace lzvk::tools {
 
         printf("[mergeMeshData] merged meshes = %zu, indices = %zu, vertexData = %zu bytes\n",
             out.meshes.size(), out.indexData.size(), out.vertexData.size());
-
-        //for (size_t i = a.meshes.size(); i < out.meshes.size(); ++i) {
-        //    const auto& mesh = out.meshes[i];
-        //    uint32_t vStart = mesh.vertexOffset;
-        //    uint32_t iStart = mesh.indexOffset;
-        //    uint32_t iCount = mesh.indexCount;
-        //    size_t vertexCount = out.vertexData.size() / vertexStride;
-
-        //    for (uint32_t j = 0; j < iCount; ++j) {
-        //        uint32_t idx = out.indexData[iStart + j];
-        //        size_t byteOffset = size_t(idx + vStart) * vertexStride;
-        //        if (byteOffset + vertexStride > out.vertexData.size()) {
-        //            printf(" Mesh %zu: index %u (vertex = %u) out of bounds! Byte offset = %zu, vertexData.size = %zu\n",
-        //                i, j, idx + vStart, byteOffset, out.vertexData.size());
-        //            break;
-        //        }
-        //    }
-        //}
     }
 
 
@@ -329,120 +311,106 @@ namespace lzvk::tools {
         using namespace lzvk::loader;
         using namespace std;
 
-        printf("[mergeMaterialLists] Begin material merge...\n");
-
-        size_t materialOffset = 0;
-        std::vector<uint32_t> materialOffsets;
-        for (const auto* p : meshList) {
-            materialOffsets.push_back(static_cast<uint32_t>(materialOffset));
-            materialOffset += static_cast<uint32_t>(p->materials.size());
-        }
-
-        // Count before merge
-        size_t totalMaterials = 0;
-        size_t totalDiffuse = 0, totalNormal = 0, totalEmissive = 0, totalOcclusion = 0;
-        for (const auto* p : meshList) {
-            totalMaterials += p->materials.size();
-            totalDiffuse += p->diffuseTextureFiles.size();
-            totalNormal += p->normalTextureFiles.size();
-            totalEmissive += p->emissiveTextureFiles.size();
-            totalOcclusion += p->occlusionTextureFiles.size();
-        }
-
-        printf("[mergeMaterialLists] Before merge: materials = %zu, diffuse = %zu, normal = %zu, emissive = %zu, occlusion = %zu\n",
-            totalMaterials, totalDiffuse, totalNormal, totalEmissive, totalOcclusion);
-
-        // Texture path deduplication
-        unordered_map<string, int> diffuseMap, normalMap, emissiveMap, occlusionMap;
-
-        auto sanitizePath = [](std::string path) -> std::string {
-            std::replace(path.begin(), path.end(), '\\', '/'); // backslash to slash
-            while (path.rfind("../", 0) == 0 || path.rfind("./", 0) == 0)
-                path = path.substr(path.find_first_of('/') + 1);
-            return path;
-            };
-
-        auto validatePath = [&sanitizePath](const std::string& label, const std::string& rawPath) {
-            if (rawPath.empty() || rawPath == "dummy.png") return;
-            std::string path = sanitizePath(rawPath);
-
-            std::ifstream f(path.c_str());
-            if (!f.good()) {
-                printf("[Warning] %s texture missing: %s\n", label.c_str(), path.c_str());
-            }
-            };
-
-
-        auto addUnique = [&sanitizePath](vector<string>& dst, unordered_map<string, int>& map, const string& rawPath) -> int {
-            if (rawPath.empty() || rawPath == "dummy.png") return -1;
-
-            std::string path = sanitizePath(rawPath);
-            std::ifstream f(path.c_str());
-            if (!f.good()) {
-                return -1;
-            }
-
-            auto it = map.find(path);
-            if (it != map.end()) return it->second;
-
-            int index = static_cast<int>(dst.size());
-            dst.push_back(path);
-            map[path] = index;
-            return index;
-            };
-
-
+        // 
         merged.materials.clear();
+        merged.diffuseTextureFiles.clear();
+        merged.normalTextureFiles.clear();
+        merged.emissiveTextureFiles.clear();
+        merged.opacityTextureFiles.clear();
 
-        for (size_t i = 0; i < meshList.size(); ++i)
-        {
-            const auto* src = meshList[i];
-            for (const auto& mat : src->materials)
-            {
-                Material m = mat;
+        //
+        vector<Material> allMaterials;
+        unordered_map<size_t, size_t> materialToSourceMap;
 
-                validatePath("Diffuse", mat.baseColorTexturePath);
-                validatePath("Normal", mat.normalTexturePath);
-                validatePath("Emissive", mat.emissiveTexturePath);
-                validatePath("Occlusion", mat.occlusionTexturePath);
+        vector<const vector<string>*> diffuseLists, normalLists, emissiveLists, opacityLists;
 
-                m.baseColorTexture = addUnique(merged.diffuseTextureFiles, diffuseMap, mat.baseColorTexturePath);
-                m.normalTexture = addUnique(merged.normalTextureFiles, normalMap, mat.normalTexturePath);
-                m.emissiveTexture = addUnique(merged.emissiveTextureFiles, emissiveMap, mat.emissiveTexturePath);
-                m.occlusionTexture = addUnique(merged.occlusionTextureFiles, occlusionMap, mat.occlusionTexturePath);
-                m.opacityTexture = -1;
+        for (size_t i = 0; i < meshList.size(); ++i) {
+            const auto* meshData = meshList[i];
 
-                merged.materials.push_back(m);
+            diffuseLists.push_back(&meshData->diffuseTextureFiles);
+            normalLists.push_back(&meshData->normalTextureFiles);
+            emissiveLists.push_back(&meshData->emissiveTextureFiles);
+            opacityLists.push_back(&meshData->opacityTextureFiles);
+
+            for (const auto& mat : meshData->materials) {
+                allMaterials.push_back(mat);
+                materialToSourceMap[allMaterials.size() - 1] = i;
             }
         }
 
-        // Update mesh materialID
-        uint32_t globalMaterialOffset = 0;
-        for (size_t i = 0; i < meshList.size(); ++i)
-        {
-            uint32_t localCount = static_cast<uint32_t>(meshList[i]->materials.size());
-            for (uint32_t j = 0; j < localCount; ++j)
-            {
-                uint32_t localMatID = j;
-                uint32_t globalMatID = globalMaterialOffset + j;
-
-                for (auto& mesh : merged.meshes)
-                {
-                    if (mesh.materialID == localMatID)
-                    {
-                        mesh.materialID = globalMatID;
+        // 3.
+        auto buildUnifiedTextureList = [](const vector<const vector<string>*>& sources, vector<string>& unifiedList) {
+            unordered_map<string, int> map;
+            for (const auto* list : sources) {
+                for (const auto& path : *list) {
+                    if (map.find(path) == map.end()) {
+                        map[path] = static_cast<int>(unifiedList.size());
+                        unifiedList.push_back(path);
                     }
                 }
             }
-            globalMaterialOffset += localCount;
+            return map;
+            };
+
+        auto diffuseMap = buildUnifiedTextureList(diffuseLists, merged.diffuseTextureFiles);
+        auto normalMap = buildUnifiedTextureList(normalLists, merged.normalTextureFiles);
+        auto emissiveMap = buildUnifiedTextureList(emissiveLists, merged.emissiveTextureFiles);
+        auto opacityMap = buildUnifiedTextureList(opacityLists, merged.opacityTextureFiles);
+
+        // 4
+        auto remapIndex = [&](size_t matIndex, uint32_t& index, const vector<const vector<string>*>& texLists, const unordered_map<string, int>& map) {
+            if (index == uint32_t(-1)) return;
+
+            size_t srcMesh = materialToSourceMap[matIndex];
+            const auto& list = *texLists[srcMesh];
+
+            if (index >= list.size()) {
+                index = uint32_t(-1);
+                return;
+            }
+
+            const string& texPath = list[index];
+            auto it = map.find(texPath);
+            if (it != map.end())
+                index = static_cast<uint32_t>(it->second);
+            else
+                index = uint32_t(-1);
+            };
+
+        for (size_t i = 0; i < allMaterials.size(); ++i) {
+            Material& m = allMaterials[i];
+
+            remapIndex(i, m.baseColorTexture, diffuseLists, diffuseMap);
+            remapIndex(i, m.normalTexture, normalLists, normalMap);
+            remapIndex(i, m.emissiveTexture, emissiveLists, emissiveMap);
+            remapIndex(i, m.opacityTexture, opacityLists, opacityMap);
+
         }
 
-        printf("[mergeMaterialLists] After merge: materials = %zu, diffuse = %zu, normal = %zu, emissive = %zu, occlusion = %zu\n",
+        merged.materials = allMaterials;
+
+        size_t meshOffset = 0;
+        size_t materialOffset = 0;
+        for (size_t i = 0; i < meshList.size(); ++i) {
+            const auto* src = meshList[i];
+            const size_t localMatCount = src->materials.size();
+            for (size_t j = 0; j < src->meshes.size(); ++j) {
+                merged.meshes[meshOffset + j].materialID += static_cast<uint32_t>(materialOffset);
+            }
+            meshOffset += src->meshes.size();
+            materialOffset += localMatCount;
+        }
+
+        printf("[mergeMaterialLists] After merge: materials = %zu, diffuse = %zu, normal = %zu, emissive = %zu, opacity = %zu\n",
             merged.materials.size(),
             merged.diffuseTextureFiles.size(),
             merged.normalTextureFiles.size(),
             merged.emissiveTextureFiles.size(),
-            merged.occlusionTextureFiles.size());
+            merged.opacityTextureFiles.size());
     }
+
+
+
+
 
 }

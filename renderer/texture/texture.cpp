@@ -67,6 +67,18 @@ namespace lzvk::renderer {
 		mImageInfo.sampler = mSampler->getSampler();
 	}
 
+	Texture::Texture(const lzvk::wrapper::Device::Ptr& device,
+		const lzvk::wrapper::Image::Ptr& image)
+	{
+		mDevice = device;
+		mImage = image;
+
+		mSampler = lzvk::wrapper::Sampler::create(mDevice);
+		mImageInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+		mImageInfo.imageView = mImage->getImageView();
+		mImageInfo.sampler = mSampler->getSampler();
+	}
+
 	Texture::~Texture() {
 
 	}

@@ -26,25 +26,33 @@ namespace lzvk::wrapper {
 		mResolvedAttachmentReference = ref;
 	}
 
-	void SubPass::buildSubPassDescription(){
+	void SubPass::buildSubPassDescription() {
 		
 		if (mColorAttachmentReferences.empty()) {
-
 			throw std::runtime_error("Error: color attachment group is empty!");
 		}
 
 		mSubPassDescription.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
-
 		mSubPassDescription.colorAttachmentCount = static_cast<uint32_t>(mColorAttachmentReferences.size());
 		mSubPassDescription.pColorAttachments = mColorAttachmentReferences.data();
-
 		mSubPassDescription.inputAttachmentCount = static_cast<uint32_t>(mInputAttachmentReferences.size());
 		mSubPassDescription.pInputAttachments = mInputAttachmentReferences.data();
 
-		mSubPassDescription.pResolveAttachments = &mResolvedAttachmentReference;
+		//
+		if (mResolvedAttachmentReference.layout != VK_IMAGE_LAYOUT_UNDEFINED) {
+			mSubPassDescription.pResolveAttachments = &mResolvedAttachmentReference;
+		}
+		else {
+			mSubPassDescription.pResolveAttachments = nullptr;
+		}
 
-		mSubPassDescription.pDepthStencilAttachment = mDepthStencilAttachmentReference.layout == VK_IMAGE_LAYOUT_UNDEFINED ? nullptr : &mDepthStencilAttachmentReference;
-	
+		// 
+		if (mDepthStencilAttachmentReference.layout != VK_IMAGE_LAYOUT_UNDEFINED) {
+			mSubPassDescription.pDepthStencilAttachment = &mDepthStencilAttachmentReference;
+		}
+		else {
+			mSubPassDescription.pDepthStencilAttachment = nullptr;
+		}
 	}
 
 	RenderPass::RenderPass(const Device::Ptr& device) {
@@ -62,6 +70,23 @@ namespace lzvk::wrapper {
 	void RenderPass::addDependency(const VkSubpassDependency& dependency) { mDependencies.push_back(dependency); }
 
 	void RenderPass::addAttachment(const VkAttachmentDescription& attachmentDes) { mAttachmentDescriptions.push_back(attachmentDes); }
+
+	void RenderPass::addColorAttachmentDesc(const AttachmentDesc& desc) {
+		mColorAttachmentDescs.push_back(desc);
+	}
+
+	void RenderPass::addResolveAttachmentDesc(const AttachmentDesc& desc) {
+		
+		mResolveAttachmentDescs.push_back(desc);
+	}
+
+	void RenderPass::addDepthAttachmentDesc(const AttachmentDesc& desc) {
+		mDepthAttachmentDesc = desc;
+	}
+
+	void RenderPass::addDepthResolveAttachmentDesc(const AttachmentDesc& desc) {
+		mDepthResolveAttachmentDesc = desc;
+	}
 
 	void RenderPass::buildRenderPass() {
 

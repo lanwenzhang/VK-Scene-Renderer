@@ -30,6 +30,7 @@ namespace lzvk::renderer {
         [[nodiscard]] auto getDiffuseParams() const { return std::vector{ mSceneDiffuseTexturesParam }; }
         [[nodiscard]] auto getEmissiveParams() const { return std::vector{ mSceneEmissiveTexturesParam }; }
         [[nodiscard]] auto getNormalParams() const { return std::vector{ mSceneNormalTexturesParam }; }
+        [[nodiscard]] auto getOpacityParams() const { return std::vector{ mSceneOpacityTexturesParam }; }
 
     private:
 
@@ -39,5 +40,6 @@ namespace lzvk::renderer {
         lzvk::wrapper::UniformParameter::Ptr mSceneDiffuseTexturesParam;
         lzvk::wrapper::UniformParameter::Ptr mSceneEmissiveTexturesParam;
         lzvk::wrapper::UniformParameter::Ptr mSceneNormalTexturesParam;
+        lzvk::wrapper::UniformParameter::Ptr mSceneOpacityTexturesParam;
     };
 }

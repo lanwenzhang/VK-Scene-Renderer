@@ -31,8 +31,18 @@ namespace lzvk::wrapper {
 		// 1.3 Logical device
 		void createLogicalDevice();
 		VkSampleCountFlagBits getMaxUsableSampleCount();
-
 		PFN_vkGetBufferDeviceAddress getBufferDeviceAddressFunction() const;
+
+		const char* resolveModeToString(VkResolveModeFlagBits mode) {
+			switch (mode) {
+			case VK_RESOLVE_MODE_NONE: return "VK_RESOLVE_MODE_NONE";
+			case VK_RESOLVE_MODE_SAMPLE_ZERO_BIT: return "VK_RESOLVE_MODE_SAMPLE_ZERO_BIT";
+			case VK_RESOLVE_MODE_AVERAGE_BIT: return "VK_RESOLVE_MODE_AVERAGE_BIT";
+			case VK_RESOLVE_MODE_MIN_BIT: return "VK_RESOLVE_MODE_MIN_BIT";
+			case VK_RESOLVE_MODE_MAX_BIT: return "VK_RESOLVE_MODE_MAX_BIT";
+			default: return "Unknown";
+			}
+		}
 
 		// 2 For external call
 		[[nodiscard]] auto getDevice() const { return mDevice;}
@@ -43,6 +53,7 @@ namespace lzvk::wrapper {
 		[[nodiscard]] auto getGraphicQueue() const { return mGraphicQueue;}
 		[[nodiscard]] auto getPresentQueue() const { return mPresentQueue; }
 		[[nodiscard]] auto getComputeQueue() const { return mComputeQueue; }
+
 
 	private:
 
@@ -60,7 +71,10 @@ namespace lzvk::wrapper {
 		VkQueue mComputeQueue{ VK_NULL_HANDLE };
 
 		VkSampleCountFlagBits mSampleCounts{ VK_SAMPLE_COUNT_1_BIT };
+		VkResolveModeFlagBits mDepthResolveMode{ VK_RESOLVE_MODE_NONE };
+
 		PFN_vkGetBufferDeviceAddress fpGetBufferDeviceAddress = nullptr;
+
 	};
 
 }

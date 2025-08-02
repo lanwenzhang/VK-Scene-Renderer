@@ -33,6 +33,7 @@ layout(set = 1, binding = 2) readonly buffer MaterialParams { Material materials
 layout(set = 2, binding = 0) uniform sampler2D diffuseTextures[];
 layout(set = 3, binding = 0) uniform sampler2D emissiveTextures[];
 layout(set = 4, binding = 0) uniform sampler2D normalTextures[];
+layout(set = 5, binding = 0) uniform sampler2D opacityTextures[];
 
 
 void runAlphaTest(float alpha, float alphaThreshold)
@@ -63,6 +64,11 @@ void main()
         baseColor *= texture(diffuseTextures[materials[matID].baseColorTexture], fragUV);
     }
 
+    if (materials[matID].opacityTexture > 0) {
+    baseColor.a = texture(opacityTextures[materials[matID].opacityTexture], fragUV).r;
+    }
+
+
     runAlphaTest(baseColor.a, materials[matID].alphaTest / max(32.0 * fwidth(fragUV.x), 1.0));
 
     vec3 normal = normalize(fragNormal);
@@ -72,9 +78,9 @@ void main()
         normal = normalize(tbn * sampledNormal);
     }
 
-    vec4 emissive = vec4(materials[matID].emissiveFactor.rgb, 0.0);
+    vec4 emissive = vec4(0.0, 0.0, 0.0, 0.0);
     if (materials[matID].emissiveTexture > 0) {
-        emissive *= texture(emissiveTextures[materials[matID].emissiveTexture], fragUV);
+        emissive += texture(emissiveTextures[materials[matID].emissiveTexture], fragUV);
     }
 
     // ========== HARD-CODED DIRECTIONAL LIGHTS ==========
@@ -86,9 +92,10 @@ void main()
 
     float NdotL = NdotL1 + NdotL2;
 
-    vec3 diffuseColor = baseColor.rgb * NdotL;
+    vec4 diffuse = baseColor * NdotL;
 
-    outColor = vec4(diffuseColor, baseColor.a) + emissive;
+    outColor = diffuse + emissive;
+
 }
 
 

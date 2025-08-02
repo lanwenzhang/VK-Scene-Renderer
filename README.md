@@ -8,8 +8,8 @@ A real-time Vulkan renderer supporting large-scale 3D scenes, with scene graph m
 ## Features
 - Batch rendering
 - Indirect rendering
-- Multisample anti-aliasing
 - Screen space ambient occulusion
+- HDR tone mapping
 
 ## Build
 

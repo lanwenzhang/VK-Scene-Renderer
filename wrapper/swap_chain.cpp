@@ -58,7 +58,7 @@ namespace lzvk::wrapper {
 
 		// 3.3 Image relevant info
 		createInfo.preTransform = swapChainSupportInfo.mCapabilities.currentTransform;
-		createInfo.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR; // not blend with other contents(e.g GUI) 
+		createInfo.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
 		createInfo.presentMode = presentMode;
 
 		createInfo.clipped = VK_TRUE;
@@ -76,7 +76,6 @@ namespace lzvk::wrapper {
 		// 5 Create swap chain image -  image create by swap chain might change the image count
 		vkGetSwapchainImagesKHR(mDevice->getDevice(), mSwapChain, &mImageCount, nullptr);
 		mSwapChainImages.resize(mImageCount);
-
 		vkGetSwapchainImagesKHR(mDevice->getDevice(), mSwapChain, &mImageCount, mSwapChainImages.data());
 
 		// 6 Create swap chain image view - image view created by swap chain is not what we want
@@ -99,7 +98,7 @@ namespace lzvk::wrapper {
 		
 		for (int i = 0; i < mImageCount; ++i) {
 
-			mDepthImages[i] = Image::createDepthImage(mDevice, mSwapChainExtent.width, mSwapChainExtent.height, mDevice->getMaxUsableSampleCount());
+			mDepthImages[i] = Image::createDepthImage(mDevice, mSwapChainExtent.width, mSwapChainExtent.height, VK_SAMPLE_COUNT_1_BIT);
 
 			mDepthImages[i]->setImageLayout(VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT, region, commandPool);
 		}
@@ -115,6 +114,7 @@ namespace lzvk::wrapper {
 		regionMutiSample.layerCount = 1;
 
 		for (int i = 0; i < mImageCount; ++i) {
+
 			mMultiSampleImages[i] = Image::createRenderTargetImage(mDevice, mSwapChainExtent.width, mSwapChainExtent.height,mSwapChainFormat);
 
 			mMultiSampleImages[i]->setImageLayout(VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, 
@@ -123,57 +123,15 @@ namespace lzvk::wrapper {
 
 	}
 
-	void SwapChain::createFrameBuffers(const RenderPass::Ptr& renderPass) {
-
-		// 7 Create framebuffer
-		mSwapChainFrameBuffers.resize(mImageCount);
-		for (int i = 0; i < mImageCount; ++i) {
-
-			// Framebuffer contains n colorattachment and 1 depthstencil attachment
-			std::array<VkImageView, 3> attachments = {
-				mSwapChainImageViews[i],
-				mMultiSampleImages[i]->getImageView(),
-				mDepthImages[i]->getImageView()
-			};
-
-			VkFramebufferCreateInfo frameBufferCreateInfo{};
-			frameBufferCreateInfo.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
-			frameBufferCreateInfo.renderPass = renderPass->getRenderPass();
-			frameBufferCreateInfo.attachmentCount = static_cast<uint32_t>(attachments.size());
-			frameBufferCreateInfo.pAttachments = attachments.data();
-			frameBufferCreateInfo.width = mSwapChainExtent.width;
-			frameBufferCreateInfo.height = mSwapChainExtent.height;
-			frameBufferCreateInfo.layers = 1;
-
-			if (vkCreateFramebuffer(mDevice->getDevice(), &frameBufferCreateInfo, nullptr, &mSwapChainFrameBuffers[i]) != VK_SUCCESS) {
-
-				throw std::runtime_error("Error: Failed to create framebuffer");
-			}
-		}
-	}
-
 	SwapChain::~SwapChain() {
 
-		for (auto& frameBuffer : mSwapChainFrameBuffers) {
-
-			vkDestroyFramebuffer(mDevice->getDevice(), frameBuffer, nullptr);
-
+		for (auto& framebuffer : mFramebuffers) {
+			framebuffer.reset();
 		}
-		mSwapChainFrameBuffers.clear();
-
-		for (auto& imageView : mSwapChainImageViews) {
-
+		for (auto imageView : mSwapChainImageViews) {
 			vkDestroyImageView(mDevice->getDevice(), imageView, nullptr);
 		}
-		mSwapChainImageViews.clear();
-
-
-		mDepthImages.clear();
-		mMultiSampleImages.clear();
-		mSwapChainImages.clear();
-
 		if (mSwapChain != VK_NULL_HANDLE) {
-
 			vkDestroySwapchainKHR(mDevice->getDevice(), mSwapChain, nullptr);
 		}
 	}

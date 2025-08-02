@@ -1,7 +1,6 @@
 ﻿#include "application.h"
 #include "../tools/scene_tools.h"
 
-
 namespace lzvk::core {
 
 	void Application::run() {
@@ -35,7 +34,7 @@ namespace lzvk::core {
 		mCamera.setPosition(glm::vec3(0.0f, 10.0f, 3.0f));
 		mCamera.lookAt(glm::vec3(0.0f, 10.0f, 3.0f), glm::vec3(0.0f, 0.0f, -10.0f), glm::vec3(0.0f, 1.0f, 0.0f));
 		mCamera.update();
-		mCamera.setPerpective(45.0f, (float)mWidth / (float)mHeight, 0.1f, 2000.0f);
+		mCamera.setPerpective(45.0f, (float)mWidth / (float)mHeight, 0.01f, 1000.0f);
 		mCamera.setSpeed(0.01f);
 
 	}
@@ -47,16 +46,131 @@ namespace lzvk::core {
 		mSurface = lzvk::wrapper::Surface::create(mInstance, mWindow);
 		mDevice = lzvk::wrapper::Device::create(mInstance, mSurface);
 		mCommandPool = lzvk::wrapper::CommandPool::create(mDevice);
-
 		mSwapChain = lzvk::wrapper::SwapChain::create(mDevice, mWindow, mSurface, mCommandPool);
 		mWidth = mSwapChain->getExtent().width;
 		mHeight = mSwapChain->getExtent().height;
 
-		// 2 Set up pipeline
-		mRenderPass = lzvk::wrapper::RenderPass::create(mDevice);
-		createRenderPass();
-		mSwapChain->createFrameBuffers(mRenderPass);
+		// 2 create resources and frame buffer
+		// 2.1 pass 01 geometry
+		createGeometryFramebuffer();
 		
+		// 2.2 pass 02 ssao
+		createSSAOResources();
+	
+		// 2.3 pass 03 blur
+		createBlurImages();
+
+		// 2.4 pass 04 combine
+
+		// 3 create scene buffer
+		createSceneBuffers();
+
+		// 4 create descriptor
+		createDescriptorSets();
+
+		// 5 create pipeline
+		createSkyboxPipeline();
+
+		createSceneGraphPipeline();
+
+		createSSAOPipeline();
+
+		createBlurPipelines();
+
+		createCombinePipeline();
+
+		// 6 create command buffers
+		createCommandBuffers();
+
+		// 7 create sync
+		createSyncObjects();
+
+	}
+
+	void Application::createGeometryFramebuffer() {
+		
+		// 1 color image
+		mColorImage_Geometry = lzvk::wrapper::Image::create(
+			mDevice,
+			mWidth, mHeight,
+			VK_FORMAT_R16G16B16A16_SFLOAT,
+			VK_IMAGE_TYPE_2D,
+			VK_IMAGE_TILING_OPTIMAL,
+			VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT,
+			VK_SAMPLE_COUNT_1_BIT,
+			VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+			VK_IMAGE_ASPECT_COLOR_BIT
+		);
+
+
+
+		// 2 depth image
+		mDepthImage_Geometry = lzvk::wrapper::Image::create(
+			mDevice,
+			mWidth, mHeight,
+			lzvk::wrapper::Image::findDepthFormat(mDevice),
+			VK_IMAGE_TYPE_2D,
+			VK_IMAGE_TILING_OPTIMAL,
+			VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT,
+			VK_SAMPLE_COUNT_1_BIT,
+			VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+			VK_IMAGE_ASPECT_DEPTH_BIT
+		);
+
+
+		// 3 create framebuffer
+		mFramebuffer_Geometry = lzvk::wrapper::Framebuffer::create(mDevice, mWidth, mHeight, true);
+		mFramebuffer_Geometry->addColorAttachment(mColorImage_Geometry);
+		mFramebuffer_Geometry->addDepthAttachment(mDepthImage_Geometry);
+	}
+
+	void Application::createSSAOResources() {
+
+		mRotationTexture = lzvk::renderer::Texture::create(mDevice, mCommandPool, "assets/ssao/rot_texture.bmp");
+		mAOImage_SSAO = lzvk::wrapper::Image::create(
+			mDevice,
+			mWidth, mHeight,
+			VK_FORMAT_R8G8B8A8_UNORM,
+			VK_IMAGE_TYPE_2D,
+			VK_IMAGE_TILING_OPTIMAL,
+			VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT,
+			VK_SAMPLE_COUNT_1_BIT,
+			VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+			VK_IMAGE_ASPECT_COLOR_BIT
+		);
+
+	}
+
+	void Application::createBlurImages() {
+
+		mAOImage_BlurPing = lzvk::wrapper::Image::create(
+			mDevice,
+			mWidth, mHeight,
+			VK_FORMAT_R8G8B8A8_UNORM,
+			VK_IMAGE_TYPE_2D,
+			VK_IMAGE_TILING_OPTIMAL,
+			VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+			VK_SAMPLE_COUNT_1_BIT,
+			VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+			VK_IMAGE_ASPECT_COLOR_BIT
+		);
+
+		mAOImage_BlurPong = lzvk::wrapper::Image::create(
+			mDevice,
+			mWidth, mHeight,
+			VK_FORMAT_R8G8B8A8_UNORM,
+			VK_IMAGE_TYPE_2D,
+			VK_IMAGE_TILING_OPTIMAL,
+			VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+			VK_SAMPLE_COUNT_1_BIT,
+			VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+			VK_IMAGE_ASPECT_COLOR_BIT
+		);
+
+	}
+
+	void Application::createSceneBuffers() {
+
 		const std::string exteriorMeshCache = "assets/.cache/exterior.meshes";
 		const std::string exteriorSceneCache = "assets/.cache/exterior.scene";
 		const std::string interiorMeshCache = "assets/.cache/interior.meshes";
@@ -153,26 +267,11 @@ namespace lzvk::core {
 		// ---------- Merge MESH DATA (test only) ----------
 		lzvk::tools::mergeMeshData(mMeshData, mMeshDataExterior, mMeshDataInterior);
 		lzvk::tools::mergeMaterialLists(mMeshData, { &mMeshDataExterior, &mMeshDataInterior });
+
 		mScene.localTransform[0] = glm::scale(glm::mat4(1.0f), glm::vec3(0.01f));
 		lzvk::loader::recalculateGlobalTransforms(mScene);
 
-		//mSceneInterior.localTransform[0] = glm::scale(glm::mat4(1.0f), glm::vec3(0.01f));
-		//lzvk::loader::recalculateGlobalTransforms(mSceneInterior);
-
-		/*mSceneMesh = lzvk::renderer::SceneMeshRenderer::create(mDevice, mCommandPool, mMeshDataExterior, mSceneExterior, MAX_FRAMES_IN_FLIGHT);*/
-		//mSceneMesh = lzvk::renderer::SceneMeshRenderer::create(mDevice, mCommandPool, mMeshDataInterior, mSceneInterior, MAX_FRAMES_IN_FLIGHT);
 		mSceneMesh = lzvk::renderer::SceneMeshRenderer::create(mDevice, mCommandPool, mMeshData, mScene, MAX_FRAMES_IN_FLIGHT);
-
-		createDescriptorSets();
-
-		mSkyboxPipeline = lzvk::wrapper::Pipeline::create(mDevice, mRenderPass);
-		createSkyboxPipeline();
-
-		mSceneGraphPipeline = lzvk::wrapper::Pipeline::create(mDevice, mRenderPass);
-		createSceneGraphPipeline();
-
-		createCommandBuffers();
-		createSyncObjects();
 
 	}
 
@@ -224,9 +323,94 @@ namespace lzvk::core {
 			mDescriptorPool_Skybox,
 			1
 		);
+
+		//
+		// ========== SSAO Descriptor ==========
+		//
+
+		mSSAOUniformManager = lzvk::renderer::SSAOUniformManager::create();
+		mSSAOUniformManager->init(mDevice);
+
+		std::vector<lzvk::wrapper::UniformParameter::Ptr> ssaoParams = mSSAOUniformManager->getParams();
+
+		mDescriptorSetLayout_SSAO = lzvk::wrapper::DescriptorSetLayout::create(mDevice);
+		mDescriptorSetLayout_SSAO->build(ssaoParams);
+
+		mDescriptorPool_SSAO = lzvk::wrapper::DescriptorPool::create(mDevice);
+		mDescriptorPool_SSAO->build(ssaoParams, MAX_FRAMES_IN_FLIGHT);
+
+		mDescriptorSet_SSAO = lzvk::wrapper::DescriptorSet::create(
+			mDevice,
+			ssaoParams,
+			mDescriptorSetLayout_SSAO,
+			mDescriptorPool_SSAO,
+			MAX_FRAMES_IN_FLIGHT
+		);
+
+	//
+	// ========== Blur Uniform ==========
+	//
+
+		mBlurUniformManager = lzvk::renderer::BlurUniformManager::create();
+		mBlurUniformManager->init(mDevice);
+
+		std::vector<lzvk::wrapper::UniformParameter::Ptr> blurParams = mBlurUniformManager->getParams();
+
+		mDescriptorSetLayout_Blur = lzvk::wrapper::DescriptorSetLayout::create(mDevice);
+		mDescriptorSetLayout_Blur->build(blurParams);
+
+		mDescriptorPool_Blur = lzvk::wrapper::DescriptorPool::create(mDevice);
+		mDescriptorPool_Blur->build(blurParams, mBlurPassCount * 2 * MAX_FRAMES_IN_FLIGHT);
+		
+		mDescriptorSet_BlurH.reserve(mBlurPassCount);
+		mDescriptorSet_BlurV.reserve(mBlurPassCount);
+
+		for (int i = 0; i < mBlurPassCount; i++) {
+
+			auto setBlurH = lzvk::wrapper::DescriptorSet::create(
+				mDevice,
+				blurParams,
+				mDescriptorSetLayout_Blur,
+				mDescriptorPool_Blur,
+				MAX_FRAMES_IN_FLIGHT
+			);
+
+			mDescriptorSet_BlurH.push_back(setBlurH);
+
+			auto setBlurV = lzvk::wrapper::DescriptorSet::create(
+				mDevice,
+				blurParams,
+				mDescriptorSetLayout_Blur,
+				mDescriptorPool_Blur,
+				MAX_FRAMES_IN_FLIGHT
+			);
+
+			mDescriptorSet_BlurV.push_back(setBlurV);
+		}
+
+
+		//
+		// ========== Combine Uniform ==========
+		//
+		mCombineUniformManager = lzvk::renderer::CombineUniformManager::create();
+		mCombineUniformManager->init(mDevice);
+
+		auto combineParams = mCombineUniformManager->getParams();
+
+		mDescriptorSetLayout_Combine = lzvk::wrapper::DescriptorSetLayout::create(mDevice);
+		mDescriptorSetLayout_Combine->build(combineParams);
+
+		mDescriptorPool_Combine = lzvk::wrapper::DescriptorPool::create(mDevice);
+		mDescriptorPool_Combine->build(combineParams, MAX_FRAMES_IN_FLIGHT);
+
+		mDescriptorSet_Combine = lzvk::wrapper::DescriptorSet::create(
+			mDevice, combineParams,
+			mDescriptorSetLayout_Combine,
+			mDescriptorPool_Combine,
+			MAX_FRAMES_IN_FLIGHT);
 	}
 
-	void Application::applyCommonPipelineState(const lzvk::wrapper::Pipeline::Ptr& pipeline, bool enableDepthWrite, VkCullModeFlagBits cullMode, bool isSceneGraph) {
+	void Application::applyCommonPipelineState(const lzvk::wrapper::Pipeline::Ptr& pipeline, bool enableDepthWrite, VkCullModeFlagBits cullMode, PipelineType type) {
 		
 		// Dynamic state
 		std::vector<VkDynamicState> dynamicStates = {
@@ -248,7 +432,7 @@ namespace lzvk::core {
 
 		// MSAA
 		pipeline->mSampleState.sampleShadingEnable = VK_FALSE;
-		pipeline->mSampleState.rasterizationSamples = mDevice->getMaxUsableSampleCount();
+		pipeline->mSampleState.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
 		pipeline->mSampleState.minSampleShading = 1.0f;
 		pipeline->mSampleState.pSampleMask = nullptr;
 		pipeline->mSampleState.alphaToCoverageEnable = VK_FALSE;
@@ -282,30 +466,74 @@ namespace lzvk::core {
 		pipeline->mBlendState.blendConstants[2] = 0.0f;
 		pipeline->mBlendState.blendConstants[3] = 0.0f;
 
-		if (isSceneGraph) {
-			pipeline->mSetLayoutsStorage = {
+		switch (type)
+		{
+			case PipelineType::SceneGraph: {
 
-				 mDescriptorSetLayout_Frame->getLayout(),
-				 mSceneMesh->getDescriptorSetLayout_Static()->getLayout(),
-				 mSceneMesh->getDescriptorSetLayout_Diffuse()->getLayout(),
-				 mSceneMesh->getDescriptorSetLayout_Emissive()->getLayout(),
-				 mSceneMesh->getDescriptorSetLayout_Normal()->getLayout()
-			};
-		}
-		else {
-			pipeline->mSetLayoutsStorage = {
-				mDescriptorSetLayout_Frame->getLayout(),
-				mDescriptorSetLayout_Skybox->getLayout()
-			};
+				pipeline->mSetLayoutsStorage = {
+					mDescriptorSetLayout_Frame->getLayout(),
+					mSceneMesh->getDescriptorSetLayout_Static()->getLayout(),
+					mSceneMesh->getDescriptorSetLayout_Diffuse()->getLayout(),
+					mSceneMesh->getDescriptorSetLayout_Emissive()->getLayout(),
+					mSceneMesh->getDescriptorSetLayout_Normal()->getLayout(),
+					mSceneMesh->getDescriptorSetLayout_Opacity()->getLayout(),
+				};
+
+
+			}
+									 break;
+			case PipelineType::Skybox: {
+				pipeline->mSetLayoutsStorage = {
+					mDescriptorSetLayout_Frame->getLayout(),
+					mDescriptorSetLayout_Skybox->getLayout()
+				};
+			}
+								 break;
+
+			case PipelineType::Combine: {
+				
+				pipeline->mSetLayoutsStorage = {
+					mDescriptorSetLayout_Combine->getLayout()
+				};
+
+				static VkPushConstantRange combinePcRange{
+					VK_SHADER_STAGE_FRAGMENT_BIT,
+					0,
+					sizeof(float) * 2
+				};
+				pipeline->mPushConstantRanges = { combinePcRange };
+
+			}
+		
+				break;
 		}
 
-		std::cout << "Pipeline using set count = " << pipeline->mSetLayoutsStorage.size() << std::endl;
 		pipeline->mLayoutState.setLayoutCount = static_cast<uint32_t>(pipeline->mSetLayoutsStorage.size());
 		pipeline->mLayoutState.pSetLayouts = pipeline->mSetLayoutsStorage.data();
-		pipeline->mLayoutState.flags = 0;;
+		pipeline->mLayoutState.flags = 0;
+
+		if (!pipeline->mPushConstantRanges.empty()) {
+			pipeline->mLayoutState.pushConstantRangeCount = static_cast<uint32_t>(pipeline->mPushConstantRanges.size());
+			pipeline->mLayoutState.pPushConstantRanges = pipeline->mPushConstantRanges.data();
+		}
+		else {
+			pipeline->mLayoutState.pushConstantRangeCount = 0;
+			pipeline->mLayoutState.pPushConstantRanges = nullptr;
+		}
+
 	}
 
 	void Application::createSkyboxPipeline() {
+
+		mSkyboxPipeline = lzvk::wrapper::Pipeline::create(mDevice);
+		mSkyboxPipeline->setColorAttachmentFormats({ mColorImage_Geometry->getFormat() });
+
+		VkFormat depthFormat = mDepthImage_Geometry->getFormat();
+		mSkyboxPipeline->setDepthAttachmentFormat(depthFormat);
+
+		if (depthFormat == VK_FORMAT_D32_SFLOAT_S8_UINT || depthFormat == VK_FORMAT_D24_UNORM_S8_UINT) {
+			mSkyboxPipeline->setStencilAttachmentFormat(depthFormat);
+		}
 
 		// Shaders
 		std::vector<lzvk::wrapper::Shader::Ptr> shaderGroup{};
@@ -325,13 +553,23 @@ namespace lzvk::core {
 		mSkyboxPipeline->mAssemblyState.primitiveRestartEnable = VK_FALSE;
 
 		// Common states
-		applyCommonPipelineState(mSkyboxPipeline, false, VK_CULL_MODE_FRONT_BIT, false);
+		applyCommonPipelineState(mSkyboxPipeline, false, VK_CULL_MODE_FRONT_BIT, PipelineType::Skybox);
 
 		// Render pass
 		mSkyboxPipeline->build();
 	}
 
 	void Application::createSceneGraphPipeline() {
+
+		mSceneGraphPipeline = lzvk::wrapper::Pipeline::create(mDevice);
+		mSceneGraphPipeline->setColorAttachmentFormats({ mColorImage_Geometry->getFormat() });
+		
+		VkFormat depthFormat = mDepthImage_Geometry->getFormat();
+
+		mSceneGraphPipeline->setDepthAttachmentFormat(depthFormat);
+		if (depthFormat == VK_FORMAT_D32_SFLOAT_S8_UINT || depthFormat == VK_FORMAT_D24_UNORM_S8_UINT) {
+			mSceneGraphPipeline->setStencilAttachmentFormat(depthFormat);
+		}
 
 		std::vector<lzvk::wrapper::Shader::Ptr> shaderGroup{};
 		shaderGroup.push_back(lzvk::wrapper::Shader::create(mDevice, "shaders/scene_graph/scene_graph_vs.spv", VK_SHADER_STAGE_VERTEX_BIT, "main"));
@@ -350,90 +588,79 @@ namespace lzvk::core {
 		mSceneGraphPipeline->mAssemblyState.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
 		mSceneGraphPipeline->mAssemblyState.primitiveRestartEnable = VK_FALSE;
 
-		applyCommonPipelineState(mSceneGraphPipeline, true, VK_CULL_MODE_BACK_BIT, true);
+		applyCommonPipelineState(mSceneGraphPipeline, true, VK_CULL_MODE_BACK_BIT, PipelineType::SceneGraph);
 
 		mSceneGraphPipeline->build();
 	}
 
-	void Application::createRenderPass() {
+	void Application::createSSAOPipeline() {
 
-		// 1.1 Resolve color attachment
-		VkAttachmentDescription finalAttachmentDes{};
-		finalAttachmentDes.format = mSwapChain->getFormat();
-		finalAttachmentDes.samples = VK_SAMPLE_COUNT_1_BIT;
-		finalAttachmentDes.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
-		finalAttachmentDes.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
-		finalAttachmentDes.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
-		finalAttachmentDes.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-		finalAttachmentDes.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-		finalAttachmentDes.finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+		mSSAOPipeline = lzvk::wrapper::ComputePipeline::create(mDevice);
 
-		mRenderPass->addAttachment(finalAttachmentDes);
+		auto ssaoShader = lzvk::wrapper::Shader::create(mDevice, "shaders/ssao/ssao_comp.spv", VK_SHADER_STAGE_COMPUTE_BIT, "main");
+		mSSAOPipeline->setShader(ssaoShader);
+		mSSAOPipeline->setDescriptorSetLayouts({ mDescriptorSetLayout_SSAO->getLayout() });
+		mSSAOPipeline->build();
+	}
 
-		// 1.2 Multi-sample color attachment
-		VkAttachmentDescription MutiAttachmentDes{};
-		MutiAttachmentDes.format = mSwapChain->getFormat();
-		MutiAttachmentDes.samples = mDevice->getMaxUsableSampleCount();
-		MutiAttachmentDes.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
-		MutiAttachmentDes.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
-		MutiAttachmentDes.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
-		MutiAttachmentDes.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-		MutiAttachmentDes.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-		MutiAttachmentDes.finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+	void Application::createBlurPipelines() {
 
-		mRenderPass->addAttachment(MutiAttachmentDes);
+		// Load shader module (shared for both)
+		auto blurShader = lzvk::wrapper::Shader::create(mDevice, "shaders/ssao/blur_comp.spv", VK_SHADER_STAGE_COMPUTE_BIT, "main");
 
-		// 1.3 Depth attachment
-		VkAttachmentDescription depthAttachmentDes{};
-		depthAttachmentDes.format = lzvk::wrapper::Image::findDepthFormat(mDevice);
-		depthAttachmentDes.samples = mDevice->getMaxUsableSampleCount();
-		depthAttachmentDes.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
-		depthAttachmentDes.storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-		depthAttachmentDes.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
-		depthAttachmentDes.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-		depthAttachmentDes.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-		depthAttachmentDes.finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+		const uint32_t kSpecHorizontal = 1;
+		const uint32_t kSpecVertical = 0;
 
-		mRenderPass->addAttachment(depthAttachmentDes);
+		// Horizontal pipeline
+		mBlurPipelineH = lzvk::wrapper::ComputePipeline::create(mDevice);
+		mBlurPipelineH->setShader(blurShader);
+		mBlurPipelineH->setDescriptorSetLayouts({ mDescriptorSetLayout_Blur->getLayout() });
+		mBlurPipelineH->setSpecializationConstant(0, sizeof(uint32_t), &kSpecHorizontal);
+		mBlurPipelineH->build();
 
-		// 2 Attachment reference
-		VkAttachmentReference finalAttachmentRef{};
-		finalAttachmentRef.attachment = 0;
-		finalAttachmentRef.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+		// Vertical pipeline
+		mBlurPipelineV = lzvk::wrapper::ComputePipeline::create(mDevice);
+		mBlurPipelineV->setShader(blurShader);
+		mBlurPipelineV->setDescriptorSetLayouts({ mDescriptorSetLayout_Blur->getLayout() });
+		mBlurPipelineV->setSpecializationConstant(0, sizeof(uint32_t), &kSpecVertical);
+		mBlurPipelineV->build();
+	}
 
-		VkAttachmentReference mutiAttachmentRef{};
-		mutiAttachmentRef.attachment = 1;
-		mutiAttachmentRef.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+	void Application::createCombinePipeline() {
 
-		VkAttachmentReference depthAttachmentRef{};
-		depthAttachmentRef.attachment = 2;
-		depthAttachmentRef.layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+		// 1 create pipeline
+		mCombinePipeline = lzvk::wrapper::Pipeline::create(mDevice);
 
-		// 3 Subpass 
-		lzvk::wrapper::SubPass subPass{};
-		subPass.addColorAttachmentReference(mutiAttachmentRef);
-		subPass.setDepthStencilAttachmentReference(depthAttachmentRef);
-		subPass.setResolveAttachmentReference(finalAttachmentRef);
+		mCombinePipeline->setColorAttachmentFormats({ mSwapChain->getFormat() });
 
-		subPass.buildSubPassDescription();
+		VkFormat depthFormat = mSwapChain->getDepthImageFormat();
+		mCombinePipeline->setDepthAttachmentFormat(depthFormat);
+		if (depthFormat == VK_FORMAT_D32_SFLOAT_S8_UINT || depthFormat == VK_FORMAT_D24_UNORM_S8_UINT) {
+			mCombinePipeline->setStencilAttachmentFormat(depthFormat);
+		}
 
-		mRenderPass->addSubPass(subPass);
+		// 2.set shader group
+		std::vector<lzvk::wrapper::Shader::Ptr> shaderGroup{};
+		shaderGroup.push_back(lzvk::wrapper::Shader::create(mDevice, "shaders/ssao/quad_flip_vs.spv", VK_SHADER_STAGE_VERTEX_BIT, "main"));
+		shaderGroup.push_back(lzvk::wrapper::Shader::create(mDevice, "shaders/ssao/combine_fs.spv", VK_SHADER_STAGE_FRAGMENT_BIT, "main"));
+		mCombinePipeline->setShaderGroup(shaderGroup);
 
-		// 4 Subpass dependency
-		VkSubpassDependency dependency{};
-		dependency.srcSubpass = VK_SUBPASS_EXTERNAL;
-		dependency.dstSubpass = 0;
-		dependency.srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-		dependency.srcAccessMask = 0;
-		dependency.dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-		dependency.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+		// 3.vertex
+		mCombinePipeline->mVertexInputState.vertexBindingDescriptionCount = 0;
+		mCombinePipeline->mVertexInputState.pVertexBindingDescriptions = nullptr;
+		mCombinePipeline->mVertexInputState.vertexAttributeDescriptionCount = 0;
+		mCombinePipeline->mVertexInputState.pVertexAttributeDescriptions = nullptr;
 
-		mRenderPass->addDependency(dependency);
+		// 4. Input assembly
+		mCombinePipeline->mAssemblyState.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
+		mCombinePipeline->mAssemblyState.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
+		mCombinePipeline->mAssemblyState.primitiveRestartEnable = VK_FALSE;
 
-		// 5 build renderpass
-		mRenderPass->buildRenderPass();
+		// 5. common state
+		applyCommonPipelineState(mCombinePipeline, false, VK_CULL_MODE_NONE, PipelineType::Combine);
 
-
+		// 8. Build Pipeline
+		mCombinePipeline->build();
 	}
 
 	void Application::createCommandBuffers() {
@@ -447,26 +674,34 @@ namespace lzvk::core {
 		}
 	}
 
-	void Application::recordCommandBuffer(uint32_t imageIndex) {
+	void Application::transitionGeometryImages(const lzvk::wrapper::CommandBuffer::Ptr& cmd) {
 
-		mCommandBuffers[mCurrentFrame]->begin();
+			cmd->transitionImageLayout(
+				mColorImage_Geometry->getImage(),
+				mColorImage_Geometry->getFormat(),
+				VK_IMAGE_LAYOUT_UNDEFINED,
+				VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+				VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
+				VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT
+			);
 
+			cmd->transitionImageLayout(
+				mDepthImage_Geometry->getImage(),
+				mDepthImage_Geometry->getFormat(),
+				VK_IMAGE_LAYOUT_UNDEFINED,
+				VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
+				VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
+				VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT
+
+			);
+
+	}
+
+	void Application::recordGeometryPass(const lzvk::wrapper::CommandBuffer::Ptr& cmd) {
+
+		transitionGeometryImages(cmd);
 		// --- Begin Render Pass ---
-		VkRenderPassBeginInfo renderBeginInfo{};
-		renderBeginInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
-		renderBeginInfo.renderPass = mRenderPass->getRenderPass();
-		renderBeginInfo.framebuffer = mSwapChain->getFrameBuffer(imageIndex);
-		renderBeginInfo.renderArea.offset = { 0, 0 };
-		renderBeginInfo.renderArea.extent = mSwapChain->getExtent();
-
-		std::vector<VkClearValue> clearValues{};
-		clearValues.push_back({ {0.09f, 0.125f, 0.192f, 1.0f} });
-		clearValues.push_back({ {0.09f, 0.125f, 0.192f, 1.0f} });
-		clearValues.push_back({ {1.0f, 0} });
-		renderBeginInfo.clearValueCount = static_cast<uint32_t>(clearValues.size());
-		renderBeginInfo.pClearValues = clearValues.data();
-
-		mCommandBuffers[mCurrentFrame]->beginRenderPass(renderBeginInfo);
+		cmd->beginRendering(mFramebuffer_Geometry);
 
 		// --- Dynamic State ---
 		VkViewport viewport{};
@@ -476,30 +711,255 @@ namespace lzvk::core {
 		viewport.height = static_cast<float>(mHeight);
 		viewport.minDepth = 0.0f;
 		viewport.maxDepth = 1.0f;
-		mCommandBuffers[mCurrentFrame]->setViewport(0, viewport);
+		cmd->setViewport(0, viewport);
 
 		VkRect2D scissor{};
 		scissor.offset = { 0, 0 };
 		scissor.extent = { mWidth, mHeight };
-		mCommandBuffers[mCurrentFrame]->setScissor(0, scissor);
+		cmd->setScissor(0, scissor);
 
 		// --- skybox ---
-		mCommandBuffers[mCurrentFrame]->bindGraphicPipeline(mSkyboxPipeline->getPipeline());
-		mCommandBuffers[mCurrentFrame]->bindDescriptorSet(mSkyboxPipeline->getLayout(), mDescriptorSet_Frame->getDescriptorSet(mCurrentFrame), 0);
-		mCommandBuffers[mCurrentFrame]->bindDescriptorSet(mSkyboxPipeline->getLayout(), mDescriptorSet_Skybox->getDescriptorSet(0), 1);
-		mCommandBuffers[mCurrentFrame]->draw(36);
+		cmd->bindGraphicPipeline(mSkyboxPipeline->getPipeline());
+		cmd->bindDescriptorSet(VK_PIPELINE_BIND_POINT_GRAPHICS, mSkyboxPipeline->getLayout(), mDescriptorSet_Frame->getDescriptorSet(mCurrentFrame), 0);
+		cmd->bindDescriptorSet(VK_PIPELINE_BIND_POINT_GRAPHICS, mSkyboxPipeline->getLayout(), mDescriptorSet_Skybox->getDescriptorSet(0), 1);
+		cmd->draw(36);
 
 		// --- large scene ---
-		mCommandBuffers[mCurrentFrame]->bindGraphicPipeline(mSceneGraphPipeline->getPipeline());
-		mCommandBuffers[mCurrentFrame]->bindDescriptorSet(mSceneGraphPipeline->getLayout(), mDescriptorSet_Frame->getDescriptorSet(mCurrentFrame),0);
-		mCommandBuffers[mCurrentFrame]->bindDescriptorSet(mSceneGraphPipeline->getLayout(), mSceneMesh->getDescriptorSet_Static()->getDescriptorSet(0), 1);
-		mCommandBuffers[mCurrentFrame]->bindDescriptorSet(mSceneGraphPipeline->getLayout(), mSceneMesh->getDescriptorSet_Diffuse()->getDescriptorSet(0), 2);
-		mCommandBuffers[mCurrentFrame]->bindDescriptorSet(mSceneGraphPipeline->getLayout(), mSceneMesh->getDescriptorSet_Emissive()->getDescriptorSet(0), 3);
-		mCommandBuffers[mCurrentFrame]->bindDescriptorSet(mSceneGraphPipeline->getLayout(), mSceneMesh->getDescriptorSet_Normal()->getDescriptorSet(0), 4);
-		mSceneMesh->draw(mCommandBuffers[mCurrentFrame]);
-		mCommandBuffers[mCurrentFrame]->endRenderPass();
-		mCommandBuffers[mCurrentFrame]->end();
+		cmd->bindGraphicPipeline(mSceneGraphPipeline->getPipeline());
+		cmd->bindDescriptorSet(VK_PIPELINE_BIND_POINT_GRAPHICS, mSceneGraphPipeline->getLayout(), mDescriptorSet_Frame->getDescriptorSet(mCurrentFrame), 0);
+		cmd->bindDescriptorSet(VK_PIPELINE_BIND_POINT_GRAPHICS, mSceneGraphPipeline->getLayout(), mSceneMesh->getDescriptorSet_Static()->getDescriptorSet(0), 1);
+		cmd->bindDescriptorSet(VK_PIPELINE_BIND_POINT_GRAPHICS, mSceneGraphPipeline->getLayout(), mSceneMesh->getDescriptorSet_Diffuse()->getDescriptorSet(0), 2);
+		cmd->bindDescriptorSet(VK_PIPELINE_BIND_POINT_GRAPHICS, mSceneGraphPipeline->getLayout(), mSceneMesh->getDescriptorSet_Emissive()->getDescriptorSet(0), 3);
+		cmd->bindDescriptorSet(VK_PIPELINE_BIND_POINT_GRAPHICS, mSceneGraphPipeline->getLayout(), mSceneMesh->getDescriptorSet_Normal()->getDescriptorSet(0), 4);
+		cmd->bindDescriptorSet(VK_PIPELINE_BIND_POINT_GRAPHICS, mSceneGraphPipeline->getLayout(), mSceneMesh->getDescriptorSet_Opacity()->getDescriptorSet(0), 5);
+		mSceneMesh->draw(cmd);
 
+		cmd->endRendering();
+
+	}
+
+	void Application::recordSSAOPass(const lzvk::wrapper::CommandBuffer::Ptr& cmd) {
+		
+		cmd->transitionImageLayout(
+			mDepthImage_Geometry->getImage(),
+			mDepthImage_Geometry->getFormat(),
+			VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
+			VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+			VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT,
+			VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT
+		);
+
+		if (!mDepthTexture_SSAO) {
+
+			mDepthTexture_SSAO = lzvk::renderer::Texture::create(mDevice, mDepthImage_Geometry);
+		}
+	
+		mSSAOUniformManager->update(mDescriptorSet_SSAO, mDepthTexture_SSAO, mRotationTexture, mAOImage_SSAO, mCurrentFrame);
+
+		// 1. Layout transition for AO output image to GENERAL
+		cmd->transitionImageLayout(
+			mAOImage_SSAO->getImage(),
+			mAOImage_SSAO->getFormat(),
+			VK_IMAGE_LAYOUT_UNDEFINED,
+			VK_IMAGE_LAYOUT_GENERAL,
+			VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+			VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT
+		);
+
+
+		// 2. Bind compute pipeline
+		cmd->bindComputePipeline(mSSAOPipeline->getPipeline());
+		cmd->bindDescriptorSet(VK_PIPELINE_BIND_POINT_COMPUTE, mSSAOPipeline->getLayout(), mDescriptorSet_SSAO->getDescriptorSet(mCurrentFrame), 0);
+
+		// 4. Push constants
+		SSAOPushConstants pc{};
+		pc.zNear = 0.01f;
+		pc.zFar = 1000.0f;
+		pc.radius = 0.05f;
+		pc.attScale = 0.95f;
+		pc.distScale = 1.7f;
+		cmd->pushConstants(mSSAOPipeline->getLayout(), VK_SHADER_STAGE_COMPUTE_BIT, pc);
+	
+		// 5. Dispatch compute shader
+		uint32_t groupSizeX = (mWidth + 15) / 16;
+		uint32_t groupSizeY = (mHeight + 15) / 16;
+		cmd->dispatch(groupSizeX, groupSizeY, 1);
+	}
+
+	void Application::recordBlurPass(const lzvk::wrapper::CommandBuffer::Ptr& cmd) {
+
+
+		auto pingImg = mAOImage_BlurPing;
+		auto pongImg = mAOImage_BlurPong;
+
+
+		if (!mDepthTexture_Blur)     mDepthTexture_Blur = lzvk::renderer::Texture::create(mDevice, mDepthImage_Geometry);
+		if (!mAOTexture_SSAO)        mAOTexture_SSAO = lzvk::renderer::Texture::create(mDevice, mAOImage_SSAO);
+		if (!mAOTexture_BlurPing)    mAOTexture_BlurPing = lzvk::renderer::Texture::create(mDevice, mAOImage_BlurPing);
+		if (!mAOTexture_BlurPong)    mAOTexture_BlurPong = lzvk::renderer::Texture::create(mDevice, mAOImage_BlurPong);
+
+		
+		float mBlurDepthThreshold = 30.0f;
+
+		lzvk::renderer::Texture::Ptr inputTex = mAOTexture_SSAO;
+
+		// 1. Ping-pong blur passes
+		for (int i = 0; i < mBlurPassCount; ++i) {
+
+			cmd->transitionImageLayout(
+				inputTex->getImage()->getImage(),
+				inputTex->getImage()->getFormat(),
+				VK_IMAGE_LAYOUT_GENERAL,  // or keep track of last layout
+				VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+				VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+				VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT);
+
+
+			// Horizontal pass: inputTex → ping
+			cmd->transitionImageLayout(pingImg->getImage(), pingImg->getFormat(),
+				VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL,
+				VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT);
+
+			mBlurUniformManager->update(mDescriptorSet_BlurH[i], mDepthTexture_Blur, inputTex, pingImg, mCurrentFrame);
+
+			cmd->bindComputePipeline(mBlurPipelineH->getPipeline());
+			cmd->bindDescriptorSet(VK_PIPELINE_BIND_POINT_COMPUTE, mBlurPipelineH->getLayout(), mDescriptorSet_BlurH[i]->getDescriptorSet(mCurrentFrame), 0);
+
+			BlurPushConstant pc{};
+			pc.depthThreshold = mBlurDepthThreshold;
+			cmd->pushConstants(mBlurPipelineH->getLayout(), VK_SHADER_STAGE_COMPUTE_BIT, pc);
+
+			cmd->dispatch((mWidth + 15) / 16, (mHeight + 15) / 16, 1);
+
+			inputTex = mAOTexture_BlurPing;
+
+			cmd->transitionImageLayout(
+				inputTex->getImage()->getImage(), inputTex->getImage()->getFormat(),
+				VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+				VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT);
+
+			// Vertical pass: inputTex → pong
+			cmd->transitionImageLayout(pongImg->getImage(), pongImg->getFormat(),
+				VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL,
+				VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT);
+
+			mBlurUniformManager->update(mDescriptorSet_BlurV[i], mDepthTexture_Blur, inputTex, pongImg, mCurrentFrame);
+
+			cmd->bindComputePipeline(mBlurPipelineV->getPipeline());
+			cmd->bindDescriptorSet(VK_PIPELINE_BIND_POINT_COMPUTE, mBlurPipelineV->getLayout(), mDescriptorSet_BlurV[i]->getDescriptorSet(mCurrentFrame), 0);
+
+			cmd->pushConstants(mBlurPipelineV->getLayout(), VK_SHADER_STAGE_COMPUTE_BIT, pc);
+
+			cmd->dispatch((mWidth + 15) / 16, (mHeight + 15) / 16, 1);
+
+			inputTex = mAOTexture_BlurPong;
+		}
+
+		mFinalAOImage = inputTex->getImage();
+	}
+
+	void Application::recordCombinePass(const lzvk::wrapper::CommandBuffer::Ptr& cmd, uint32_t imageIndex) {
+		
+		// 1. Transition render target
+		cmd->transitionImageLayout(
+			mSwapChain->getImage(imageIndex),
+			mSwapChain->getFormat(),
+			VK_IMAGE_LAYOUT_UNDEFINED,
+			VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+			VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
+			VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT
+		);
+
+		cmd->transitionImageLayout(
+			mColorImage_Geometry->getImage(),
+			mColorImage_Geometry->getFormat(),
+			VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+			VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+			VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+			VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT
+		);
+
+		cmd->transitionImageLayout(
+			mFinalAOImage->getImage(),
+			mFinalAOImage->getFormat(),
+			VK_IMAGE_LAYOUT_GENERAL,
+			VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+			VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+			VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT
+		);
+
+
+		if (!mColorTexture_Combine) {
+			mColorTexture_Combine = renderer::Texture::create(mDevice, mColorImage_Geometry);
+		}
+
+		if (!mAOTexture_Combine) {
+			mAOTexture_Combine = renderer::Texture::create(mDevice, mFinalAOImage);
+		}
+
+		mCombineUniformManager->update(mDescriptorSet_Combine, mColorTexture_Combine, mAOTexture_Combine, mCurrentFrame);
+
+
+		// 2. Begin render
+		cmd->beginRendering(mSwapChain, imageIndex);
+
+		// --- Dynamic State ---
+		VkViewport viewport{};
+		viewport.x = 0.0f;
+		viewport.y = 0.0f;
+		viewport.width = static_cast<float>(mWidth);
+		viewport.height = static_cast<float>(mHeight);
+		viewport.minDepth = 0.0f;
+		viewport.maxDepth = 1.0f;
+		cmd->setViewport(0, viewport);
+
+		VkRect2D scissor{};
+		scissor.offset = { 0, 0 };
+		scissor.extent = { mWidth, mHeight };
+		cmd->setScissor(0, scissor);
+
+		// 3. Bind pipeline + descriptor sets
+		cmd->bindGraphicPipeline(mCombinePipeline->getPipeline());
+		cmd->bindDescriptorSet(VK_PIPELINE_BIND_POINT_GRAPHICS, mCombinePipeline->getLayout(), mDescriptorSet_Combine->getDescriptorSet(mCurrentFrame), 0);
+
+		// 4. Push constant
+		CombinePushConstant pc{};
+		pc.scale = 3.0f;
+		pc.bias = 0.16f;
+		cmd->pushConstants(mCombinePipeline->getLayout(), VK_SHADER_STAGE_FRAGMENT_BIT, pc);
+
+		// 5. Draw fullscreen triangle
+		cmd->draw(3);
+
+		// 6. End render
+		cmd->endRendering();
+
+
+	}
+
+	void Application::recordCommandBuffer(uint32_t imageIndex) {
+
+		mCommandBuffers[mCurrentFrame]->begin();
+
+		recordGeometryPass(mCommandBuffers[mCurrentFrame]);
+
+		recordSSAOPass(mCommandBuffers[mCurrentFrame]);
+
+		recordBlurPass(mCommandBuffers[mCurrentFrame]);
+
+		recordCombinePass(mCommandBuffers[mCurrentFrame], imageIndex);
+
+		mCommandBuffers[mCurrentFrame]->transitionImageLayout(
+			mSwapChain->getImage(imageIndex),
+			mSwapChain->getFormat(),
+			VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+			VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
+			VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+			VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT
+		);
+
+
+		mCommandBuffers[mCurrentFrame]->end();
 	}
 
 	void Application::createSyncObjects() {
@@ -543,8 +1003,6 @@ namespace lzvk::core {
 		mWidth = mSwapChain->getExtent().width;
 		mHeight = mSwapChain->getExtent().height;
 
-		mSwapChain->createFrameBuffers(mRenderPass);
-
 	}
 
 	void Application::cleanupSwapChain() {
@@ -587,7 +1045,6 @@ namespace lzvk::core {
 		}
 
 		// 1.2 Update 
-		//mCamera.updatePitch(0.001f);
 		mFrameUniformManager->update(mCamera.getViewMatrix(), mCamera.getProjectMatrix(), mDescriptorSet_Frame, mCurrentFrame);
 		mInFlightFences[mCurrentFrame]->resetFence();
 
@@ -651,7 +1108,7 @@ namespace lzvk::core {
 
 	void Application::cleanUp() {
 
-		// Swapchain first
+		// Swap chain
 		mSwapChain.reset();
 
 		// Descriptor Sets
@@ -669,7 +1126,7 @@ namespace lzvk::core {
 	
 		mSkyboxPipeline.reset();
 		mSceneGraphPipeline.reset();
-		mRenderPass.reset();
+
 
 		mImageAvailableSemaphores.clear();
 		mRenderFinishedSemaphores.clear();

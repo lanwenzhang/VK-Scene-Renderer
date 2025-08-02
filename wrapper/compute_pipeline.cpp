@@ -11,6 +11,20 @@ namespace lzvk::wrapper {
 		
 		mComputeShader = computeShader;
 	}
+
+	void ComputePipeline::setSpecializationConstant(uint32_t constantId, size_t size, const void* data) {
+		
+		VkSpecializationMapEntry entry{};
+		entry.constantID = constantId;
+		entry.offset = static_cast<uint32_t>(mSpecData.size());
+		entry.size = size;
+		mSpecEntries.push_back(entry);
+
+		const uint8_t* bytes = reinterpret_cast<const uint8_t*>(data);
+		mSpecData.insert(mSpecData.end(), bytes, bytes + size);
+	}
+
+
 	void ComputePipeline::build(){
 	
 		if (!mComputeShader) {
@@ -24,8 +38,8 @@ namespace lzvk::wrapper {
 
 		VkPipelineLayoutCreateInfo layoutInfo{};
 		layoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-		layoutInfo.setLayoutCount = 0;
-		layoutInfo.pSetLayouts = nullptr;
+		layoutInfo.setLayoutCount = static_cast<uint32_t>(mSetLayouts.size());
+		layoutInfo.pSetLayouts = mSetLayouts.data();
 		layoutInfo.pushConstantRangeCount = 1;
 		layoutInfo.pPushConstantRanges = &pushConstantRange;
 
@@ -40,6 +54,16 @@ namespace lzvk::wrapper {
 		shaderStageInfo.stage = VK_SHADER_STAGE_COMPUTE_BIT;
 		shaderStageInfo.module = mComputeShader->getShaderModule();
 		shaderStageInfo.pName = mComputeShader->getShaderEntryPoint().c_str();
+
+		// Specialization constant support
+		VkSpecializationInfo specInfo{};
+		if (!mSpecEntries.empty()) {
+			specInfo.mapEntryCount = static_cast<uint32_t>(mSpecEntries.size());
+			specInfo.pMapEntries = mSpecEntries.data();
+			specInfo.dataSize = mSpecData.size();
+			specInfo.pData = mSpecData.data();
+			shaderStageInfo.pSpecializationInfo = &specInfo;
+		}
 
 		VkComputePipelineCreateInfo pipelineInfo{};
 		pipelineInfo.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;

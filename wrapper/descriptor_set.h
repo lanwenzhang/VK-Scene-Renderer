@@ -18,8 +18,10 @@ namespace lzvk::wrapper {
 		}
 
 		DescriptorSet(const Device::Ptr& device, const std::vector<UniformParameter::Ptr> params, const DescriptorSetLayout::Ptr& layout, const DescriptorPool::Ptr& pool,int frameCount);
-
 		~DescriptorSet();
+
+		void updateImage(const VkDescriptorSet& descriptorSet, uint32_t binding, const VkDescriptorImageInfo& imageInfo);
+		void updateStorageImage(const VkDescriptorSet& descriptorSet, uint32_t binding, const VkDescriptorImageInfo& imageInfo);
 
 		[[nodiscard]] auto getDescriptorSet(int frameCount) const { return mDescriptorSets[frameCount]; }
 

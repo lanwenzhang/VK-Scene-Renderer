@@ -15,6 +15,8 @@ namespace lzvk::wrapper {
 		~ComputePipeline();
 
 		void setShader(const Shader::Ptr& computeShader);
+		void setDescriptorSetLayouts(const std::vector<VkDescriptorSetLayout>& layouts) { mSetLayouts = layouts; }
+		void setSpecializationConstant(uint32_t constantId, size_t size, const void* data);
 		void build();
 
 		[[nodiscard]] auto getPipeline() const { return mComputePipeline; }
@@ -26,6 +28,9 @@ namespace lzvk::wrapper {
 		Shader::Ptr mComputeShader{ nullptr };
 		VkPipeline  mComputePipeline{ VK_NULL_HANDLE };
 		VkPipelineLayout mLayout{ VK_NULL_HANDLE };
+		std::vector<VkDescriptorSetLayout> mSetLayouts{};
+		std::vector<VkSpecializationMapEntry> mSpecEntries{};
+		std::vector<uint8_t> mSpecData{};
 	};
 }
 

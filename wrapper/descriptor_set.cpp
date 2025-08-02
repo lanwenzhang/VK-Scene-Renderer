@@ -149,6 +149,33 @@ namespace lzvk::wrapper {
         }
     }
 
+    void DescriptorSet::updateImage(const VkDescriptorSet& descriptorSet, uint32_t binding, const VkDescriptorImageInfo& imageInfo) {
+        
+        VkWriteDescriptorSet write{};
+        write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+        write.dstSet = descriptorSet;
+        write.dstBinding = binding;
+        write.dstArrayElement = 0;
+        write.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+        write.descriptorCount = 1;
+        write.pImageInfo = &imageInfo;
+
+        vkUpdateDescriptorSets(mDevice->getDevice(), 1, &write, 0, nullptr);
+    }
+
+    void DescriptorSet::updateStorageImage(const VkDescriptorSet& descriptorSet, uint32_t binding, const VkDescriptorImageInfo& imageInfo) {
+        VkWriteDescriptorSet write{};
+        write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+        write.dstSet = descriptorSet;
+        write.dstBinding = binding;
+        write.dstArrayElement = 0;
+        write.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
+        write.descriptorCount = 1;
+        write.pImageInfo = &imageInfo;
+
+        vkUpdateDescriptorSets(mDevice->getDevice(), 1, &write, 0, nullptr);
+    }
+
 
 	DescriptorSet::~DescriptorSet() {}
 

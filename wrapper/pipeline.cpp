@@ -18,6 +18,21 @@ namespace lzvk::wrapper {
 		mLayoutState.flags = VK_PIPELINE_LAYOUT_CREATE_UPDATE_AFTER_BIND_POOL_BIT;
 	}
 
+	Pipeline::Pipeline(const Device::Ptr& device) {
+
+		mDevice = device;
+		mVertexInputState.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
+		mAssemblyState.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
+		mViewportState.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
+		mRasterState.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
+		mSampleState.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
+		mBlendState.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
+		mDepthStencilState.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
+		mLayoutState.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+		mLayoutState.flags = VK_PIPELINE_LAYOUT_CREATE_UPDATE_AFTER_BIND_POOL_BIT;
+	}
+
+
 	Pipeline::~Pipeline(){
 
 		if (mLayout != VK_NULL_HANDLE) {
@@ -40,7 +55,6 @@ namespace lzvk::wrapper {
 		mDynamicState.dynamicStateCount = static_cast<uint32_t>(mDynamicStatesStorage.size());
 		mDynamicState.pDynamicStates = mDynamicStatesStorage.data();
 	}
-
 
 	void Pipeline::setShaderGroup(const std::vector<Shader::Ptr>& shaderGroup) {
 	
@@ -109,8 +123,21 @@ namespace lzvk::wrapper {
 		pipelineCreateInfo.pColorBlendState = &mBlendState;
 		pipelineCreateInfo.pDynamicState = (mDynamicState.dynamicStateCount > 0) ? &mDynamicState : nullptr;
 		pipelineCreateInfo.layout = mLayout;
-		pipelineCreateInfo.renderPass = mRenderPass->getRenderPass(); 
-		pipelineCreateInfo.subpass = 0;
+
+		if (!mRenderPass) {
+			VkPipelineRenderingCreateInfo renderingInfo{};
+			renderingInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO;
+			renderingInfo.colorAttachmentCount = static_cast<uint32_t>(mColorAttachmentFormats.size());
+			renderingInfo.pColorAttachmentFormats = mColorAttachmentFormats.data();
+			renderingInfo.depthAttachmentFormat = mDepthAttachmentFormat;
+			renderingInfo.stencilAttachmentFormat = mStencilAttachmentFormat;
+			pipelineCreateInfo.pNext = &renderingInfo;
+		}
+		else {
+			pipelineCreateInfo.renderPass = mRenderPass->getRenderPass();
+			pipelineCreateInfo.subpass = 0;
+			pipelineCreateInfo.flags |= VK_PIPELINE_CREATE_RENDERING_FRAGMENT_SHADING_RATE_ATTACHMENT_BIT_KHR;
+		}
 
 		pipelineCreateInfo.basePipelineHandle = VK_NULL_HANDLE;
 		pipelineCreateInfo.basePipelineIndex = -1;

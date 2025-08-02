@@ -16,7 +16,12 @@ namespace lzvk::renderer {
 			return std::make_shared<Texture>(device, commandPool, imageFilePath);
 		}
 
+		static Ptr create(const lzvk::wrapper::Device::Ptr& device, const lzvk::wrapper::Image::Ptr& image) {
+			return std::make_shared<Texture>(device, image);
+		}
+
 		Texture(const lzvk::wrapper::Device::Ptr& device, const lzvk::wrapper::CommandPool::Ptr& commandPool, const std::string& imageFilePath);
+		Texture(const lzvk::wrapper::Device::Ptr& device, const lzvk::wrapper::Image::Ptr& image);
 
 		~Texture();	
 

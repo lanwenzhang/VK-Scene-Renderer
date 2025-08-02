@@ -31,6 +31,31 @@ namespace lzvk::core {
 		uint32_t instancingCount;
 	};
 
+	struct SSAOPushConstants {
+		float zNear;
+		float zFar;
+		float radius;
+		float attScale;
+		float distScale;
+	};
+
+	struct BlurPushConstant {
+		float depthThreshold;
+	};
+
+	struct CombinePushConstant {
+		float scale = 1.5f;
+		float bias = 0.16f;
+	};
+
+
+	enum class PipelineType {
+		SceneGraph,
+		Skybox,
+		Combine,
+		Blur
+	};
+
 	enum class CAMERA_MOVE
 	{
 		MOVE_LEFT,

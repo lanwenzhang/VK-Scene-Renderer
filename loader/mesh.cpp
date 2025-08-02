@@ -29,6 +29,7 @@ namespace lzvk::loader {
         meshData.diffuseTextureFiles.push_back(dummyPath);
         meshData.emissiveTextureFiles.push_back(dummyPath);
         meshData.normalTextureFiles.push_back(dummyPath);
+        meshData.opacityTextureFiles.push_back(dummyPath);
 
         std::unordered_map<std::string, int> diffuseTextureMap;
         diffuseTextureMap[dummyPath] = 0;
@@ -38,6 +39,9 @@ namespace lzvk::loader {
 
         std::unordered_map<std::string, int> normalTextureMap;
         normalTextureMap[dummyPath] = 0;
+
+        std::unordered_map<std::string, int> opacityTextureMap;
+        opacityTextureMap[dummyPath] = 0;
 
         Assimp::Importer importer;
 
@@ -65,14 +69,14 @@ namespace lzvk::loader {
             m.emissiveFactor = glm::vec4(0.0f);
             m.roughness = 1.0f;
             m.metallicFactor = 1.0f;
-            m.alphaTest = 0.5f;
+            m.alphaTest = 0.0f;
             m.transparencyFactor = 1.0f;
-            m.baseColorTexture = uint32_t(-1);
 
-            m.emissiveTexture = 0;
-            m.normalTexture = 0;
-            m.opacityTexture = 0;
-            m.specularTexture = 0;
+            m.baseColorTexture = uint32_t(-1);
+            m.emissiveTexture = uint32_t(-1);
+            m.normalTexture = uint32_t(-1);
+            m.opacityTexture = uint32_t(-1);
+            m.specularTexture = uint32_t(-1);
 
             m.baseColorTexturePath = "";
             m.emissiveTexturePath = "";
@@ -80,23 +84,35 @@ namespace lzvk::loader {
             m.opacityTexturePath = "";
             m.specularTexturePath = "";
 
-            // -------- base color factor + emissive factor --------
+            // -------- base color factor --------
             aiColor4D color;
-            if (aiGetMaterialColor(aiMat, AI_MATKEY_COLOR_AMBIENT, &color) == AI_SUCCESS) {
-                m.emissiveFactor = glm::vec4(color.r, color.g, color.b, color.a);
-                if (m.emissiveFactor.w > 1.0f) m.emissiveFactor.w = 1.0f;
-            }
             if (aiGetMaterialColor(aiMat, AI_MATKEY_COLOR_DIFFUSE, &color) == AI_SUCCESS) {
                 
                m.baseColorFactor = glm::vec4(color.r, color.g, color.b, color.a);
                if (m.baseColorFactor.w > 1.0f) m.baseColorFactor.w = 1.0f;
             }
-            if (aiGetMaterialColor(aiMat, AI_MATKEY_COLOR_EMISSIVE, &color) == AI_SUCCESS) {
-                m.emissiveFactor += glm::vec4(color.r, color.g, color.b, color.a);
-                if (m.emissiveFactor.w > 1.0f) m.emissiveFactor.w = 1.0f;
+
+
+            // ---------- opacity ----------
+            const float opaquenessThreshold = 0.05f;
+            float opacity = 1.0f;
+
+            if (aiGetMaterialFloat(aiMat, AI_MATKEY_OPACITY, &opacity) == AI_SUCCESS) {
+                m.transparencyFactor = glm::clamp(1.0f - opacity, 0.0f, 1.0f);
+                if (m.transparencyFactor >= 1.0f - opaquenessThreshold)
+                    m.transparencyFactor = 0.0f;
             }
 
-            // ---------- diffuse ----------
+            // ---------- transparent  ----------
+            if (aiGetMaterialColor(aiMat, AI_MATKEY_COLOR_TRANSPARENT, &color) == AI_SUCCESS) {
+                const float opacity = std::max(std::max(color.r, color.g), color.b);
+                m.transparencyFactor = glm::clamp(opacity, 0.0f, 1.0f);
+                if (m.transparencyFactor >= 1.0f - opaquenessThreshold)
+                    m.transparencyFactor = 0.0f;
+    /*            m.alphaTest = 0.5f;*/
+            }
+
+            // ---------- diffuse texture ----------
             aiString str;
             if (AI_SUCCESS == aiMat->GetTexture(aiTextureType_DIFFUSE, 0, &str)) {
                 std::string rawPath = str.C_Str();
@@ -124,7 +140,7 @@ namespace lzvk::loader {
                 std::cout << "[Material " << i << "] Diffuse texture: dummy.png" << std::endl;
             }
 
-            // ---------- emissive ----------
+            // ---------- emissive texture ----------
             if (AI_SUCCESS == aiMat->GetTexture(aiTextureType_EMISSIVE, 0, &str)) {
                 std::string rawPath = str.C_Str();
                 std::filesystem::path texPath(rawPath);
@@ -149,46 +165,8 @@ namespace lzvk::loader {
                 std::cout << "[Material " << i << "] Emissive texture: dummy.png" << std::endl;
             }
 
-            // ---------- transparencyFactor ----------
-            const float opaquenessThreshold = 0.05f;
-            float opacity                   = 1.0f;
 
-            if (aiGetMaterialFloat(aiMat, AI_MATKEY_OPACITY, &opacity) == AI_SUCCESS) {
-                m.transparencyFactor = glm::clamp(1.0f - opacity, 0.0f, 1.0f);
-                if (m.transparencyFactor >= 1.0f - opaquenessThreshold)
-                    m.transparencyFactor = 0.0f;
-            }
-
-            // ---------- transparent color ----------
-            if (aiGetMaterialColor(aiMat, AI_MATKEY_COLOR_TRANSPARENT, &color) == AI_SUCCESS) {
-                const float opacity = std::max(std::max(color.r, color.g), color.b);
-                m.transparencyFactor = glm::clamp(opacity, 0.0f, 1.0f);
-                if (m.transparencyFactor >= 1.0f - opaquenessThreshold)
-                    m.transparencyFactor = 0.0f;
-                m.alphaTest = 0.5f;  
-            }
-
-            // ---------- opacity texture ----------
-            if (aiMat->GetTexture(aiTextureType_OPACITY, 0, &str) == AI_SUCCESS) {
-                std::string rawPath = str.C_Str();
-                std::filesystem::path texPath(rawPath);
-                std::filesystem::path objPath(path);
-                std::filesystem::path baseDir = objPath.parent_path();
-                std::filesystem::path fullPath = baseDir / texPath;
-                fullPath = fullPath.lexically_normal();
-                std::string uri = fullPath.string();
-
-                m.opacityTexturePath = uri;
-                m.opacityTexture = addTextureIfUnique(
-                    meshData.occlusionTextureFiles,
-                    std::unordered_map<std::string, int>{},  // optional: cache
-                    uri
-                );
-                m.alphaTest = 0.5f;  // enable alpha test
-            }
-
-
-            // ---------- normal ----------
+            // ---------- normal texture ----------
             bool normalFound = false;
             if (AI_SUCCESS == aiMat->GetTexture(aiTextureType_NORMALS, 0, &str)) {
                 normalFound = true;
@@ -221,6 +199,33 @@ namespace lzvk::loader {
                 std::cout << "[Material " << i << "] Normal texture: dummy.png" << std::endl;
             }
 
+
+            // ---------- opacity texture ----------
+            if (AI_SUCCESS == aiMat->GetTexture(aiTextureType_OPACITY, 0, &str)) {
+                std::string rawPath = str.C_Str();
+
+                std::filesystem::path texPath(rawPath);
+                std::filesystem::path objPath(path);
+                std::filesystem::path baseDir = objPath.parent_path();
+                std::filesystem::path fullPath = baseDir / texPath;
+                fullPath = fullPath.lexically_normal();
+                std::string uri = fullPath.string();
+
+                m.opacityTexture = addTextureIfUnique(
+                    meshData.opacityTextureFiles,
+                    opacityTextureMap,
+                    uri
+                );
+                m.opacityTexturePath = uri;
+
+                m.alphaTest = 0.5f;  // ensure alpha test is enabled for mask
+                std::cout << "[Material " << i << "] Opacity texture: " << uri << std::endl;
+            }
+            else {
+                m.opacityTexture = 0;
+                m.opacityTexturePath = "dummy.png";
+                std::cout << "[Material " << i << "] Opacity texture: dummy.png" << std::endl;
+            }
 
             aiString name;
             std::string matName;
@@ -283,6 +288,9 @@ namespace lzvk::loader {
             std::cout << "[Material " << i << "] alphaTest = " << m.alphaTest
                 << ", transparency = " << m.transparencyFactor
                 << ", baseColorTex = " << m.baseColorTexturePath
+                << ", baseColorfactor.r = " << m.baseColorFactor.r
+                << ", baseColorfactor.g = " << m.baseColorFactor.g
+                << ", baseColorfactor.b = " << m.baseColorFactor.b
                 << ", baseColorfactor.a = " << m.baseColorFactor.a
                 << ", opacityTex = " << m.opacityTexturePath << std::endl;
 
@@ -485,6 +493,7 @@ namespace lzvk::loader {
         saveStringList(meshData.diffuseTextureFiles);
         saveStringList(meshData.emissiveTextureFiles);
         saveStringList(meshData.normalTextureFiles);
+        saveStringList(meshData.opacityTextureFiles);
         saveStringList(meshData.occlusionTextureFiles);
 
         fclose(f);
@@ -559,6 +568,7 @@ namespace lzvk::loader {
         loadStringList(meshData.diffuseTextureFiles);
         loadStringList(meshData.emissiveTextureFiles);
         loadStringList(meshData.normalTextureFiles);
+        loadStringList(meshData.opacityTextureFiles);
         loadStringList(meshData.occlusionTextureFiles);
 
         fclose(f);

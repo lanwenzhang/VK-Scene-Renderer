@@ -60,11 +60,14 @@ namespace lzvk::renderer {
         [[nodiscard]] auto getDescriptorSetLayout_Diffuse() const { return mDescriptorSetLayout_Diffuse; }
         [[nodiscard]] auto getDescriptorSetLayout_Emissive() const { return mDescriptorSetLayout_Emissive; }
         [[nodiscard]] auto getDescriptorSetLayout_Normal() const { return mDescriptorSetLayout_Normal; }
+        [[nodiscard]] auto getDescriptorSetLayout_Opacity() const { return mDescriptorSetLayout_Opacity; }
 
         [[nodiscard]] auto getDescriptorSet_Static() const { return mDescriptorSet_Static; }
         [[nodiscard]] auto getDescriptorSet_Diffuse() const { return mDescriptorSet_Diffuse; }
         [[nodiscard]] auto getDescriptorSet_Emissive() const { return mDescriptorSet_Emissive; }
         [[nodiscard]] auto getDescriptorSet_Normal() const { return mDescriptorSet_Normal; }
+        [[nodiscard]] auto getDescriptorSet_Opacity() const { return mDescriptorSet_Opacity; }
+
 
     private:
 
@@ -101,6 +104,12 @@ namespace lzvk::renderer {
         lzvk::wrapper::DescriptorSet::Ptr mDescriptorSet_Normal{ nullptr };
         lzvk::wrapper::DescriptorSetLayout::Ptr mDescriptorSetLayout_Normal{ nullptr };
         lzvk::wrapper::DescriptorPool::Ptr mDescriptorPool_Normal{ nullptr };
+
+        // opacity
+        lzvk::wrapper::DescriptorSet::Ptr mDescriptorSet_Opacity{ nullptr };
+        lzvk::wrapper::DescriptorSetLayout::Ptr mDescriptorSetLayout_Opacity{ nullptr };
+        lzvk::wrapper::DescriptorPool::Ptr mDescriptorPool_Opacity{ nullptr };
+
     };
 
 }

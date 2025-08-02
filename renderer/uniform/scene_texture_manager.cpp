@@ -71,6 +71,25 @@ namespace lzvk::renderer{
             0,
             static_cast<uint32_t>(normalTextures.size())
         );
+
+        // Load opacity textures
+        std::vector<Texture::Ptr> opacityTextures;
+        for (const auto& texPath : meshData.opacityTextureFiles) {
+            /*     std::cout << "[SceneTextureManager] Loading normal texture: " << texPath << std::endl;*/
+            auto tex = std::make_shared<Texture>(
+                mDevice,
+                mCommandPool,
+                texPath
+            );
+            opacityTextures.push_back(tex);
+        }
+
+        mSceneOpacityTexturesParam = loadTextureParam(
+            opacityTextures,
+            0,
+            static_cast<uint32_t>(opacityTextures.size())
+        );
+
     }
 
     lzvk::wrapper::UniformParameter::Ptr SceneTextureManager::loadTextureParam(

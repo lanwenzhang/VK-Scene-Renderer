@@ -8,6 +8,7 @@ A real-time Vulkan renderer supporting large-scale 3D scenes, with scene graph m
 ## Features
 - Batch rendering
 - Indirect rendering
+- PCF shadow map
 - Screen space ambient occulusion
 - ACES filmic tone mapping
 

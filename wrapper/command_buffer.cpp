@@ -19,7 +19,7 @@ namespace lzvk::wrapper {
 			throw std::runtime_error("Error: failed to create command buffer");
 		}
 	}
-
+	
 	CommandBuffer::~CommandBuffer() {
 
 		if (mCommandBuffer != VK_NULL_HANDLE) {
@@ -42,32 +42,42 @@ namespace lzvk::wrapper {
 	}
 
 	void CommandBuffer::beginRendering(const Framebuffer::Ptr& framebuffer) {
-		
 		std::vector<VkRenderingAttachmentInfo> colorAttachments;
 
 		const auto& colorAttachmentsFB = framebuffer->getColorAttachments();
+		uint32_t colorAttachmentCount = 0;
+		const VkRenderingAttachmentInfo* pColorAttachmentInfos = nullptr;
 
-		for (size_t i = 0; i < colorAttachmentsFB.size(); ++i) {
-			VkRenderingAttachmentInfo attachmentInfo{};
-			attachmentInfo.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
-			attachmentInfo.imageView = colorAttachmentsFB[i]->getImageView();
-			attachmentInfo.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-			attachmentInfo.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
-			attachmentInfo.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
-			attachmentInfo.clearValue.color = { {0.0f, 0.0f, 0.0f, 1.0f} };
-			attachmentInfo.resolveMode = VK_RESOLVE_MODE_NONE;
-			colorAttachments.push_back(attachmentInfo);
+		if (!colorAttachmentsFB.empty()) {
+			for (size_t i = 0; i < colorAttachmentsFB.size(); ++i) {
+				auto& image = colorAttachmentsFB[i];
+				if (!image) continue;
+
+				VkRenderingAttachmentInfo attachmentInfo{};
+				attachmentInfo.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
+				attachmentInfo.imageView = image->getImageView();
+				attachmentInfo.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+				attachmentInfo.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+				attachmentInfo.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+				attachmentInfo.clearValue.color = { {0.0f, 0.0f, 0.0f, 1.0f} };
+				attachmentInfo.resolveMode = VK_RESOLVE_MODE_NONE;
+				colorAttachments.push_back(attachmentInfo);
+			}
+
+			colorAttachmentCount = static_cast<uint32_t>(colorAttachments.size());
+			if (colorAttachmentCount > 0) {
+				pColorAttachmentInfos = colorAttachments.data();
+			}
 		}
 
-		// --- Depth ---
+		// --- Depth Attachment ---
 		VkRenderingAttachmentInfo depthAttachment{};
-		VkRenderingAttachmentInfo* pDepthAttachment = nullptr;
+		const VkRenderingAttachmentInfo* pDepthAttachment = nullptr;
 
-		auto depthImg = framebuffer->getDepthAttachment();
-
-		if (depthImg) {
+		auto depthImage = framebuffer->getDepthAttachment();
+		if (depthImage) {
 			depthAttachment.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
-			depthAttachment.imageView = depthImg ? depthImg->getImageView() : VK_NULL_HANDLE;
+			depthAttachment.imageView = depthImage->getImageView();
 			depthAttachment.imageLayout = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL;
 			depthAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
 			depthAttachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
@@ -76,14 +86,74 @@ namespace lzvk::wrapper {
 			pDepthAttachment = &depthAttachment;
 		}
 
+		// --- Begin Rendering ---
+		VkRenderingInfo renderingInfo{};
+		renderingInfo.sType = VK_STRUCTURE_TYPE_RENDERING_INFO;
+		renderingInfo.renderArea = { {0, 0}, {framebuffer->getWidth(), framebuffer->getHeight()} };
+		renderingInfo.layerCount = 1;
+		renderingInfo.colorAttachmentCount = colorAttachmentCount;
+		renderingInfo.pColorAttachments = pColorAttachmentInfos;
+		renderingInfo.pDepthAttachment = pDepthAttachment;
+		renderingInfo.pStencilAttachment = nullptr;
+
+		vkCmdBeginRendering(mCommandBuffer, &renderingInfo);
+	}
+
+	void CommandBuffer::beginRendering(const Framebuffer::Ptr& framebuffer, uint32_t layer) {
+		
+		std::vector<VkRenderingAttachmentInfo> colorAttachments;
+
+		const auto& colorAttachmentsFB = framebuffer->getColorAttachments();
+		uint32_t colorAttachmentCount = 0;
+		const VkRenderingAttachmentInfo* pColorAttachmentInfos = nullptr;
+
+		if (!colorAttachmentsFB.empty()) {
+
+			for (size_t i = 0; i < colorAttachmentsFB.size(); ++i) {
+				
+				auto& image = colorAttachmentsFB[i];
+				if (!image) continue;
+
+				VkRenderingAttachmentInfo attachmentInfo{};
+				attachmentInfo.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
+				attachmentInfo.imageView = framebuffer->getColorAttachmentView(layer);
+				attachmentInfo.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+				attachmentInfo.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+				attachmentInfo.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+				attachmentInfo.clearValue.color = { {0.0f, 0.0f, 0.0f, 1.0f} };
+				attachmentInfo.resolveMode = VK_RESOLVE_MODE_NONE;
+				colorAttachments.push_back(attachmentInfo);
+			}
+
+			colorAttachmentCount = static_cast<uint32_t>(colorAttachments.size());
+			if (colorAttachmentCount > 0) {
+				pColorAttachmentInfos = colorAttachments.data();
+			}
+		}
+
+		// --- Depth Attachment ---
+		VkRenderingAttachmentInfo depthAttachment{};
+		const VkRenderingAttachmentInfo* pDepthAttachment = nullptr;
+
+		auto depthImage = framebuffer->getDepthAttachment();
+		if (depthImage) {
+			depthAttachment.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
+			depthAttachment.imageView = depthImage->getImageView();
+			depthAttachment.imageLayout = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL;
+			depthAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+			depthAttachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+			depthAttachment.clearValue.depthStencil = { 1.0f, 0 };
+			depthAttachment.resolveMode = VK_RESOLVE_MODE_NONE;
+			pDepthAttachment = &depthAttachment;
+		}
 
 		// --- Begin Rendering ---
 		VkRenderingInfo renderingInfo{};
 		renderingInfo.sType = VK_STRUCTURE_TYPE_RENDERING_INFO;
 		renderingInfo.renderArea = { {0, 0}, {framebuffer->getWidth(), framebuffer->getHeight()} };
 		renderingInfo.layerCount = 1;
-		renderingInfo.colorAttachmentCount = static_cast<uint32_t>(colorAttachments.size());
-		renderingInfo.pColorAttachments = colorAttachments.data();
+		renderingInfo.colorAttachmentCount = colorAttachmentCount;
+		renderingInfo.pColorAttachments = pColorAttachmentInfos;
 		renderingInfo.pDepthAttachment = pDepthAttachment;
 		renderingInfo.pStencilAttachment = nullptr;
 
@@ -132,6 +202,28 @@ namespace lzvk::wrapper {
 		vkCmdBeginRendering(mCommandBuffer, &renderingInfo);
 	}
 
+	void CommandBuffer::beginRenderingForImGui(VkImageView colorImageView, VkFormat colorFormat, VkExtent2D extent) {
+		VkRenderingAttachmentInfo colorAttachment{};
+		colorAttachment.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
+		colorAttachment.imageView = colorImageView;
+		colorAttachment.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+		colorAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;  
+		colorAttachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+		colorAttachment.clearValue.color = { {0.f, 0.f, 0.f, 1.f} };
+		colorAttachment.resolveMode = VK_RESOLVE_MODE_NONE;
+
+		VkRenderingInfo renderingInfo{};
+		renderingInfo.sType = VK_STRUCTURE_TYPE_RENDERING_INFO;
+		renderingInfo.renderArea = { {0, 0}, extent };
+		renderingInfo.layerCount = 1;
+		renderingInfo.colorAttachmentCount = 1;
+		renderingInfo.pColorAttachments = &colorAttachment;
+		renderingInfo.pDepthAttachment = nullptr;
+		renderingInfo.pStencilAttachment = nullptr;
+
+		vkCmdBeginRendering(mCommandBuffer, &renderingInfo);
+	}
+
 	void CommandBuffer::beginRenderPass(const VkRenderPassBeginInfo& renderPassBeginInfo, const VkSubpassContents& subPassContents){
 	
 		vkCmdBeginRenderPass(mCommandBuffer, &renderPassBeginInfo, subPassContents);
@@ -145,6 +237,16 @@ namespace lzvk::wrapper {
 
 	void CommandBuffer::setScissor(uint32_t firstScissor, const VkRect2D& scissor){
 		vkCmdSetScissor(mCommandBuffer, firstScissor, 1, &scissor);
+	}
+
+	void CommandBuffer::setDepthBias(float constant, float clamp, float slope) {
+		
+		vkCmdSetDepthBias(mCommandBuffer, constant, clamp, slope);
+	}
+
+	void CommandBuffer::disableDepthBias() {
+
+		vkCmdSetDepthBias(mCommandBuffer, 0.0f, 0.0f, 0.0f);
 	}
 
 	void CommandBuffer::bindGraphicPipeline(const VkPipeline& pipeline){
@@ -175,6 +277,16 @@ namespace lzvk::wrapper {
 	void CommandBuffer::pushConstants(const VkPipelineLayout layout, VkShaderStageFlags stageFlags, const lzvk::core::CombinePushConstant& pc) {
 
 		vkCmdPushConstants(mCommandBuffer, layout, stageFlags, 0, sizeof(lzvk::core::CombinePushConstant), &pc);
+	}
+
+	void CommandBuffer::pushConstants(const VkPipelineLayout layout, VkShaderStageFlags stageFlags, const lzvk::core::LightPushConstant& pc) {
+
+		vkCmdPushConstants(mCommandBuffer, layout, stageFlags, 0, sizeof(lzvk::core::LightPushConstant), &pc);
+	}
+
+	void CommandBuffer::pushConstants(const VkPipelineLayout layout, VkShaderStageFlags stageFlags, const lzvk::core::IrradiancePushConstant& pc) {
+
+		vkCmdPushConstants(mCommandBuffer, layout, stageFlags, 0, sizeof(lzvk::core::IrradiancePushConstant), &pc);
 	}
 
 	void CommandBuffer::dispatch(uint32_t x, uint32_t y, uint32_t z) {
@@ -405,41 +517,6 @@ namespace lzvk::wrapper {
 		}
 
 		transferImageLayout(barrier, srcStage, dstStage);
-	}
-
-
-
-	void CommandBuffer::blitImage(
-		VkImage srcImage,
-		VkImageLayout srcLayout,
-		VkImage dstImage,
-		VkImageLayout dstLayout,
-		VkImageAspectFlags aspectMask,
-		uint32_t width,
-		uint32_t height
-	) {
-		VkImageBlit blit{};
-		blit.srcSubresource.aspectMask = aspectMask;
-		blit.srcSubresource.mipLevel = 0;
-		blit.srcSubresource.baseArrayLayer = 0;
-		blit.srcSubresource.layerCount = 1;
-		blit.srcOffsets[0] = { 0, 0, 0 };
-		blit.srcOffsets[1] = { static_cast<int32_t>(width), static_cast<int32_t>(height), 1 };
-
-		blit.dstSubresource.aspectMask = aspectMask;
-		blit.dstSubresource.mipLevel = 0;
-		blit.dstSubresource.baseArrayLayer = 0;
-		blit.dstSubresource.layerCount = 1;
-		blit.dstOffsets[0] = { 0, 0, 0 };
-		blit.dstOffsets[1] = { static_cast<int32_t>(width), static_cast<int32_t>(height), 1 };
-
-		vkCmdBlitImage(
-			mCommandBuffer,
-			srcImage, srcLayout,
-			dstImage, dstLayout,
-			1, &blit,
-			VK_FILTER_NEAREST 
-		);
 	}
 
 

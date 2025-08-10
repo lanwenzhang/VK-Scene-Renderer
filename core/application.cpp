@@ -1,5 +1,8 @@
 ﻿#include "application.h"
 #include "../tools/scene_tools.h"
+#include "../imgui/imgui.h"                     
+#include "../imgui/imgui_impl_vulkan.h"
+#include "../imgui/imgui_impl_glfw.h"
 
 namespace lzvk::core {
 
@@ -13,7 +16,9 @@ namespace lzvk::core {
 
 	void Application::onMouseMove(double xpos, double ypos) {
 		
-		mCamera.onMouseMove(xpos, ypos);
+		if (!ImGui::GetIO().WantCaptureMouse) {
+			mCamera.onMouseMove(xpos, ypos);
+		}
 	}
 
 	void Application::onKeyDown(CAMERA_MOVE moveDirection) {
@@ -34,9 +39,10 @@ namespace lzvk::core {
 		mCamera.setPosition(glm::vec3(0.0f, 10.0f, 3.0f));
 		mCamera.lookAt(glm::vec3(0.0f, 10.0f, 3.0f), glm::vec3(0.0f, 0.0f, -10.0f), glm::vec3(0.0f, 1.0f, 0.0f));
 		mCamera.update();
-		mCamera.setPerpective(45.0f, (float)mWidth / (float)mHeight, 0.01f, 1000.0f);
+		mCamera.setPerpective(60.0f, (float)mWidth / (float)mHeight, 0.1f, 200.0f);
 		mCamera.setSpeed(0.01f);
 
+		mLight.setDirectionFromSpherical(mLightTheta, mLightPhi);
 	}
 
 	void Application::initVulkan() {
@@ -50,25 +56,32 @@ namespace lzvk::core {
 		mWidth = mSwapChain->getExtent().width;
 		mHeight = mSwapChain->getExtent().height;
 
-		// 2 create images
+		// 2 create resources and frame buffer
+		// 2.1 pass 01 geometry
+		createShadowMap();
 		createGeometryFramebuffer();
 		createSSAOResources();
 		createBlurImages();
-		createHDRImages();
 
-		// 3 create buffers
+		// 3 create scene buffer
 		createSceneBuffers();
 
 		// 4 create descriptor
 		createDescriptorSets();
 
+		createImGuiDescriptorPool();
+		initImGui();
+
+		//  create skybox texture
+		createEnvironmentMap();
+
 		// 5 create pipeline
+		createShadowPipeline();
 		createSkyboxPipeline();
 		createSceneGraphPipeline();
 		createSSAOPipeline();
 		createBlurPipelines();
 		createCombinePipeline();
-		createToneMappingPipeline();
 
 		// 6 create command buffers
 		createCommandBuffers();
@@ -76,6 +89,60 @@ namespace lzvk::core {
 		// 7 create sync
 		createSyncObjects();
 
+	}
+
+	void Application::createEnvironmentMap() {
+
+		// 1 Cube map
+		mSkyboxCube = lzvk::renderer::CubeMapTexture::create(mDevice, mCommandPool, "assets/skybox/immenstadter_horn_2k_prefilter.ktx");
+		mIrradianceCube = lzvk::renderer::CubeMapTexture::create(mDevice, mCommandPool, "assets/skybox/immenstadter_horn_2k_irradiance.ktx");
+
+		auto cmd2 = lzvk::wrapper::CommandBuffer::create(mDevice, mCommandPool);
+		cmd2->begin();
+		cmd2->transitionImageLayout(
+			mSkyboxCube->getImage()->getImage(),
+			mSkyboxCube->getImage()->getFormat(),
+			VK_IMAGE_LAYOUT_UNDEFINED,
+			VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+			VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+			VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+			0, 6
+		);
+
+		cmd2->transitionImageLayout(
+			mIrradianceCube->getImage()->getImage(),
+			mIrradianceCube->getImage()->getFormat(),
+			VK_IMAGE_LAYOUT_UNDEFINED,
+			VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+			VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+			VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+			0, 6
+		);
+
+		cmd2->end();
+		cmd2->submitSync(mDevice->getGraphicQueue());
+		
+		// 5. generate irradiance texture
+		mSkyboxUniformManager->updateCubeMap(mDescriptorSet_Skybox, mSkyboxCube, 0);
+		mSkyboxUniformManager->updateIrradianceMap(mDescriptorSet_Skybox, mIrradianceCube, 0);
+	}
+
+	void Application::createShadowMap() {
+
+		mImage_Shadow = lzvk::wrapper::Image::create(
+			mDevice,
+			mShadowMapRes, mShadowMapRes,
+			lzvk::wrapper::Image::findDepthFormat(mDevice),
+			VK_IMAGE_TYPE_2D,
+			VK_IMAGE_TILING_OPTIMAL,
+			VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT,
+			VK_SAMPLE_COUNT_1_BIT,
+			VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+			VK_IMAGE_ASPECT_DEPTH_BIT
+		);
+
+		mFramebuffer_Shadow = lzvk::wrapper::Framebuffer::create(mDevice, mShadowMapRes, mShadowMapRes, true);
+		mFramebuffer_Shadow->addDepthAttachment(mImage_Shadow);
 	}
 
 	void Application::createGeometryFramebuffer() {
@@ -158,24 +225,6 @@ namespace lzvk::core {
 			VK_IMAGE_ASPECT_COLOR_BIT
 		);
 
-	}
-
-	void Application::createHDRImages() {
-
-		mHDRImage = lzvk::wrapper::Image::create(
-			mDevice,
-			mWidth, mHeight,
-			VK_FORMAT_R16G16B16A16_SFLOAT,
-			VK_IMAGE_TYPE_2D,
-			VK_IMAGE_TILING_OPTIMAL,
-			VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
-			VK_SAMPLE_COUNT_1_BIT,
-			VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
-			VK_IMAGE_ASPECT_COLOR_BIT
-		);
-
-		mFramebuffer_HDR = lzvk::wrapper::Framebuffer::create(mDevice, mWidth, mHeight, false);
-		mFramebuffer_HDR->addColorAttachment(mHDRImage);
 	}
 
 	void Application::createSceneBuffers() {
@@ -311,11 +360,36 @@ namespace lzvk::core {
 		);
 
 		//
+		// ========== Shadow Uniform ==========
+		//
+
+		mShadowUniformManager = lzvk::renderer::ShadowUniformManager::create();
+		mShadowUniformManager->init(mDevice);
+
+		auto shadowParams = mShadowUniformManager->getParams();
+
+		mDescriptorSetLayout_Shadow = lzvk::wrapper::DescriptorSetLayout::create(mDevice);
+		mDescriptorSetLayout_Shadow->build(shadowParams);
+
+		mDescriptorPool_Shadow = lzvk::wrapper::DescriptorPool::create(mDevice);
+		mDescriptorPool_Shadow->build(shadowParams, MAX_FRAMES_IN_FLIGHT);
+
+		mDescriptorSet_Shadow = lzvk::wrapper::DescriptorSet::create(
+			mDevice,
+			shadowParams,
+			mDescriptorSetLayout_Shadow,
+			mDescriptorPool_Shadow,
+			MAX_FRAMES_IN_FLIGHT
+		);
+
+
+
+		//
 		// ========== Skybox Uniform ==========
 		//
 
 		mSkyboxUniformManager = lzvk::renderer::SkyboxUniformManager::create();
-		mSkyboxUniformManager->init(mDevice, mCommandPool, "assets/piazza_bologni_1k.hdr");
+		mSkyboxUniformManager->init(mDevice);
 
 		auto skyboxParams = mSkyboxUniformManager->getParams();
 
@@ -417,26 +491,68 @@ namespace lzvk::core {
 			mDescriptorSetLayout_Combine,
 			mDescriptorPool_Combine,
 			MAX_FRAMES_IN_FLIGHT);
+	}
 
-		//
-		// ========== HDR Uniform ==========
-		//
-		mToneMappingUniformManager = lzvk::renderer::ToneMappingUniformManager::create();
-		mToneMappingUniformManager->init(mDevice);
+	void Application::createImGuiDescriptorPool() {
+		VkDescriptorPoolSize pool_sizes[] = {
+			{ VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1000 },
+		};
 
-		auto hdrParams = mToneMappingUniformManager->getParams();
+		VkDescriptorPoolCreateInfo pool_info{};
+		pool_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+		pool_info.flags = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT;
+		pool_info.maxSets = 1000;
+		pool_info.poolSizeCount = 1;
+		pool_info.pPoolSizes = pool_sizes;
 
-		mDescriptorSetLayout_ToneMapping = lzvk::wrapper::DescriptorSetLayout::create(mDevice);
-		mDescriptorSetLayout_ToneMapping->build(hdrParams);
+		if (vkCreateDescriptorPool(mDevice->getDevice(), &pool_info, nullptr, &mImGuiDescriptorPool) != VK_SUCCESS) {
+			throw std::runtime_error("Failed to create ImGui descriptor pool");
+		}
+	}
 
-		mDescriptorPool_ToneMapping = lzvk::wrapper::DescriptorPool::create(mDevice);
-		mDescriptorPool_ToneMapping->build(hdrParams, MAX_FRAMES_IN_FLIGHT);
+	void Application::initImGui() {
 
-		mDescriptorSet_ToneMapping = lzvk::wrapper::DescriptorSet::create(
-			mDevice, hdrParams,
-			mDescriptorSetLayout_ToneMapping,
-			mDescriptorPool_ToneMapping,
-			MAX_FRAMES_IN_FLIGHT);
+		IMGUI_CHECKVERSION();
+		ImGui::CreateContext();
+
+		ImGuiIO& io = ImGui::GetIO(); (void)io;
+		io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
+
+		ImGui::StyleColorsDark();
+
+		// 2. Platform + Renderer bindings
+		ImGui_ImplGlfw_InitForVulkan(mWindow->getWindow(), true);
+
+		// 3. Init info
+		ImGui_ImplVulkan_InitInfo init_info = {};
+		init_info.Instance = mInstance->getInstance();
+		init_info.PhysicalDevice = mDevice->getPhysicalDevice();
+		init_info.Device = mDevice->getDevice();
+		init_info.QueueFamily = mDevice->getGraphicQueueFamily().value(); 
+		init_info.Queue = mDevice->getGraphicQueue();
+		init_info.PipelineCache = VK_NULL_HANDLE;
+		init_info.DescriptorPool = mImGuiDescriptorPool;
+		init_info.MinImageCount = MAX_FRAMES_IN_FLIGHT;
+		init_info.ImageCount = static_cast<uint32_t>(mSwapChain->getImageCount());
+		init_info.MSAASamples = VK_SAMPLE_COUNT_1_BIT;
+		init_info.UseDynamicRendering = true;
+		init_info.PipelineRenderingCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO;
+		init_info.PipelineRenderingCreateInfo.colorAttachmentCount = 1;
+		VkFormat color_format = mSwapChain->getFormat();
+		init_info.PipelineRenderingCreateInfo.pColorAttachmentFormats = &color_format;
+		init_info.PipelineRenderingCreateInfo.depthAttachmentFormat = VK_FORMAT_UNDEFINED;
+
+		ImGui_ImplVulkan_Init(&init_info);
+	}
+
+	void Application::cleanUpImGui() {
+
+		ImGui_ImplVulkan_Shutdown();
+		ImGui_ImplGlfw_Shutdown();
+		ImGui::DestroyContext();
+
+		vkDestroyDescriptorPool(mDevice->getDevice(), mImGuiDescriptorPool, nullptr);
+
 	}
 
 	void Application::applyCommonPipelineState(const lzvk::wrapper::Pipeline::Ptr& pipeline, bool enableDepthWrite, VkCullModeFlagBits cullMode, PipelineType type) {
@@ -446,6 +562,11 @@ namespace lzvk::core {
 			VK_DYNAMIC_STATE_VIEWPORT,
 			VK_DYNAMIC_STATE_SCISSOR
 		};
+
+		if (type == PipelineType::Shadow) {
+
+			dynamicStates.push_back(VK_DYNAMIC_STATE_DEPTH_BIAS);
+		}
 		pipeline->setDynamicStates(dynamicStates);
 
 		// Rasterization
@@ -454,7 +575,7 @@ namespace lzvk::core {
 		pipeline->mRasterState.lineWidth = 1.0f;
 		pipeline->mRasterState.cullMode = cullMode;
 		pipeline->mRasterState.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
-		pipeline->mRasterState.depthBiasEnable = VK_FALSE;
+		pipeline->mRasterState.depthBiasEnable = type == PipelineType::Shadow ? VK_TRUE : VK_FALSE;
 		pipeline->mRasterState.depthBiasConstantFactor = 0.0f;
 		pipeline->mRasterState.depthBiasClamp = 0.0f;
 		pipeline->mRasterState.depthBiasSlopeFactor = 0.0f;
@@ -497,6 +618,30 @@ namespace lzvk::core {
 
 		switch (type)
 		{
+			case PipelineType::Irradiance: {
+
+				pipeline->mSetLayoutsStorage = {
+				mDescriptorSetLayout_Skybox->getLayout()
+				};
+
+
+				VkPushConstantRange irradiancePcRange{
+					VK_SHADER_STAGE_VERTEX_BIT,
+					0,
+					sizeof(IrradiancePushConstant)
+				};
+				pipeline->mPushConstantRanges = { irradiancePcRange };
+			}
+								 break;
+
+			case PipelineType::Shadow: {
+
+				pipeline->mSetLayoutsStorage = {
+				mDescriptorSetLayout_Frame->getLayout(),
+				mSceneMesh->getDescriptorSetLayout_Static()->getLayout(),
+				};
+			}
+								 break;
 			case PipelineType::SceneGraph: {
 
 				pipeline->mSetLayoutsStorage = {
@@ -506,9 +651,20 @@ namespace lzvk::core {
 					mSceneMesh->getDescriptorSetLayout_Emissive()->getLayout(),
 					mSceneMesh->getDescriptorSetLayout_Normal()->getLayout(),
 					mSceneMesh->getDescriptorSetLayout_Opacity()->getLayout(),
+					mSceneMesh->getDescriptorSetLayout_Specular()->getLayout(),
+					mDescriptorSetLayout_Shadow->getLayout(),
+					mDescriptorSetLayout_Skybox->getLayout()
 				};
+
+				VkPushConstantRange lightPcRange{
+						VK_SHADER_STAGE_FRAGMENT_BIT,
+						0,
+						sizeof(LightPushConstant)
+				};
+				pipeline->mPushConstantRanges = { lightPcRange };
+
 			}
-								break;
+									 break;
 			case PipelineType::Skybox: {
 				pipeline->mSetLayoutsStorage = {
 					mDescriptorSetLayout_Frame->getLayout(),
@@ -516,6 +672,7 @@ namespace lzvk::core {
 				};
 			}
 								 break;
+
 			case PipelineType::Combine: {
 				
 				pipeline->mSetLayoutsStorage = {
@@ -530,14 +687,8 @@ namespace lzvk::core {
 				pipeline->mPushConstantRanges = { combinePcRange };
 
 			}
+		
 				break;
-			case PipelineType::ToneMapping: {
-
-				pipeline->mSetLayoutsStorage = {
-					mDescriptorSetLayout_ToneMapping->getLayout()
-				};
-			}
-			 break;
 		}
 
 		pipeline->mLayoutState.setLayoutCount = static_cast<uint32_t>(pipeline->mSetLayoutsStorage.size());
@@ -552,6 +703,42 @@ namespace lzvk::core {
 			pipeline->mLayoutState.pushConstantRangeCount = 0;
 			pipeline->mLayoutState.pPushConstantRanges = nullptr;
 		}
+
+	}
+
+	void Application::createShadowPipeline() {
+
+		mShadowPipeline = lzvk::wrapper::Pipeline::create(mDevice);
+
+		VkFormat depthFormat = mImage_Shadow->getFormat();
+		mShadowPipeline->setDepthAttachmentFormat(depthFormat);
+
+		if (depthFormat == VK_FORMAT_D32_SFLOAT_S8_UINT || depthFormat == VK_FORMAT_D24_UNORM_S8_UINT) {
+			mShadowPipeline->setStencilAttachmentFormat(depthFormat);
+		}
+
+		// shaders
+		std::vector<lzvk::wrapper::Shader::Ptr> shaderGroup{};
+		shaderGroup.push_back(lzvk::wrapper::Shader::create(mDevice, "shaders/shadow/shadow_vs.spv", VK_SHADER_STAGE_VERTEX_BIT, "main"));
+		shaderGroup.push_back(lzvk::wrapper::Shader::create(mDevice, "shaders/shadow/shadow_fs.spv", VK_SHADER_STAGE_FRAGMENT_BIT, "main"));
+		mShadowPipeline->setShaderGroup(shaderGroup);
+
+		// vertex
+		auto vertexBindingDes = mSceneMesh->getVertexInputBindingDescriptions();
+		auto attributeDes = mSceneMesh->getAttributeDescriptions();
+		mShadowPipeline->mVertexInputState.vertexBindingDescriptionCount = static_cast<uint32_t>(vertexBindingDes.size());
+		mShadowPipeline->mVertexInputState.pVertexBindingDescriptions = vertexBindingDes.data();
+		mShadowPipeline->mVertexInputState.vertexAttributeDescriptionCount = static_cast<uint32_t>(attributeDes.size());
+		mShadowPipeline->mVertexInputState.pVertexAttributeDescriptions = attributeDes.data();
+
+		// Input assembly
+		mShadowPipeline->mAssemblyState.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
+		mShadowPipeline->mAssemblyState.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
+		mShadowPipeline->mAssemblyState.primitiveRestartEnable = VK_FALSE;
+
+		applyCommonPipelineState(mShadowPipeline, true, VK_CULL_MODE_BACK_BIT, PipelineType::Shadow);
+
+		mShadowPipeline->build();
 
 	}
 
@@ -629,7 +816,7 @@ namespace lzvk::core {
 
 		mSSAOPipeline = lzvk::wrapper::ComputePipeline::create(mDevice);
 
-		auto ssaoShader = lzvk::wrapper::Shader::create(mDevice, "shaders/post_processing/ssao/ssao_comp.spv", VK_SHADER_STAGE_COMPUTE_BIT, "main");
+		auto ssaoShader = lzvk::wrapper::Shader::create(mDevice, "shaders/ssao/ssao_comp.spv", VK_SHADER_STAGE_COMPUTE_BIT, "main");
 		mSSAOPipeline->setShader(ssaoShader);
 		mSSAOPipeline->setDescriptorSetLayouts({ mDescriptorSetLayout_SSAO->getLayout() });
 		mSSAOPipeline->build();
@@ -638,7 +825,7 @@ namespace lzvk::core {
 	void Application::createBlurPipelines() {
 
 		// Load shader module (shared for both)
-		auto blurShader = lzvk::wrapper::Shader::create(mDevice, "shaders/post_processing/ssao/blur_comp.spv", VK_SHADER_STAGE_COMPUTE_BIT, "main");
+		auto blurShader = lzvk::wrapper::Shader::create(mDevice, "shaders/ssao/blur_comp.spv", VK_SHADER_STAGE_COMPUTE_BIT, "main");
 
 		const uint32_t kSpecHorizontal = 1;
 		const uint32_t kSpecVertical = 0;
@@ -663,18 +850,18 @@ namespace lzvk::core {
 		// 1 create pipeline
 		mCombinePipeline = lzvk::wrapper::Pipeline::create(mDevice);
 
-		mCombinePipeline->setColorAttachmentFormats({ mHDRImage->getFormat() });
+		mCombinePipeline->setColorAttachmentFormats({ mSwapChain->getFormat() });
 
-		//VkFormat depthFormat = mHDRImage->getFormat();
-		//mCombinePipeline->setDepthAttachmentFormat(depthFormat);
-		//if (depthFormat == VK_FORMAT_D32_SFLOAT_S8_UINT || depthFormat == VK_FORMAT_D24_UNORM_S8_UINT) {
-		//	mCombinePipeline->setStencilAttachmentFormat(depthFormat);
-		//}
+		VkFormat depthFormat = mSwapChain->getDepthImageFormat();
+		mCombinePipeline->setDepthAttachmentFormat(depthFormat);
+		if (depthFormat == VK_FORMAT_D32_SFLOAT_S8_UINT || depthFormat == VK_FORMAT_D24_UNORM_S8_UINT) {
+			mCombinePipeline->setStencilAttachmentFormat(depthFormat);
+		}
 
 		// 2.set shader group
 		std::vector<lzvk::wrapper::Shader::Ptr> shaderGroup{};
-		shaderGroup.push_back(lzvk::wrapper::Shader::create(mDevice, "shaders/post_processing/quad_flip_vs.spv", VK_SHADER_STAGE_VERTEX_BIT, "main"));
-		shaderGroup.push_back(lzvk::wrapper::Shader::create(mDevice, "shaders/post_processing/ssao/combine_fs.spv", VK_SHADER_STAGE_FRAGMENT_BIT, "main"));
+		shaderGroup.push_back(lzvk::wrapper::Shader::create(mDevice, "shaders/ssao/quad_flip_vs.spv", VK_SHADER_STAGE_VERTEX_BIT, "main"));
+		shaderGroup.push_back(lzvk::wrapper::Shader::create(mDevice, "shaders/ssao/combine_fs.spv", VK_SHADER_STAGE_FRAGMENT_BIT, "main"));
 		mCombinePipeline->setShaderGroup(shaderGroup);
 
 		// 3.vertex
@@ -695,43 +882,6 @@ namespace lzvk::core {
 		mCombinePipeline->build();
 	}
 
-	void Application::createToneMappingPipeline() {
-
-		mToneMappingPipeline = lzvk::wrapper::Pipeline::create(mDevice);
-
-		mToneMappingPipeline->setColorAttachmentFormats({ mSwapChain->getFormat() });
-
-		VkFormat depthFormat = mSwapChain->getDepthImageFormat();
-		mToneMappingPipeline->setDepthAttachmentFormat(depthFormat);
-		if (depthFormat == VK_FORMAT_D32_SFLOAT_S8_UINT || depthFormat == VK_FORMAT_D24_UNORM_S8_UINT) {
-			mToneMappingPipeline->setStencilAttachmentFormat(depthFormat);
-		}
-
-		// 2.set shader group
-		std::vector<lzvk::wrapper::Shader::Ptr> shaderGroup{};
-		shaderGroup.push_back(lzvk::wrapper::Shader::create(mDevice, "shaders/post_processing/quad_flip_vs.spv", VK_SHADER_STAGE_VERTEX_BIT, "main"));
-		shaderGroup.push_back(lzvk::wrapper::Shader::create(mDevice, "shaders/post_processing/hdr/tone_mapping_fs.spv", VK_SHADER_STAGE_FRAGMENT_BIT, "main"));
-		mToneMappingPipeline->setShaderGroup(shaderGroup);
-
-		// 3.vertex
-		mToneMappingPipeline->mVertexInputState.vertexBindingDescriptionCount = 0;
-		mToneMappingPipeline->mVertexInputState.pVertexBindingDescriptions = nullptr;
-		mToneMappingPipeline->mVertexInputState.vertexAttributeDescriptionCount = 0;
-		mToneMappingPipeline->mVertexInputState.pVertexAttributeDescriptions = nullptr;
-
-		// 4. Input assembly
-		mToneMappingPipeline->mAssemblyState.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
-		mToneMappingPipeline->mAssemblyState.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
-		mToneMappingPipeline->mAssemblyState.primitiveRestartEnable = VK_FALSE;
-
-		// 5. common state
-		applyCommonPipelineState(mToneMappingPipeline, false, VK_CULL_MODE_NONE, PipelineType::ToneMapping);
-
-		// 8. Build Pipeline
-		mToneMappingPipeline->build();
-
-	}
-
 	void Application::createCommandBuffers() {
 
 		mCommandBuffers.resize(MAX_FRAMES_IN_FLIGHT);
@@ -741,6 +891,49 @@ namespace lzvk::core {
 			mCommandBuffers[i] = lzvk::wrapper::CommandBuffer::create(mDevice, mCommandPool);
 
 		}
+	}
+
+	void Application::recordShadowPass(const lzvk::wrapper::CommandBuffer::Ptr& cmd) {
+
+		cmd->transitionImageLayout(
+			mImage_Shadow->getImage(),
+			mImage_Shadow->getFormat(),
+			VK_IMAGE_LAYOUT_UNDEFINED,
+			VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
+			VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
+			VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT
+		);
+
+		mFrameUniformManager->updateLight(mLight.getViewMatrix(), mLight.getProjectionMatrix(-74.45, 37.15, -54.96, 60.30, 41.56, -34.74), mDescriptorSet_Frame, mCurrentFrame);
+
+		// --- Begin Render Pass ---
+		cmd->beginRendering(mFramebuffer_Shadow);
+
+		// --- Dynamic State ---
+		VkViewport viewport{};
+		viewport.x = 0.0f;
+		viewport.y = 0.0f;
+		viewport.width = static_cast<float>(mShadowMapRes);
+		viewport.height = static_cast<float>(mShadowMapRes);
+		viewport.minDepth = 0.0f;
+		viewport.maxDepth = 1.0f;
+		cmd->setViewport(0, viewport);
+
+		VkRect2D scissor{};
+		scissor.offset = { 0, 0 };
+		scissor.extent = { mShadowMapRes, mShadowMapRes };
+		cmd->setScissor(0, scissor);
+
+		// --- large scene ---
+		cmd->bindGraphicPipeline(mShadowPipeline->getPipeline());
+		cmd->setDepthBias(1.1f, 0.0f, 2.0f);
+		cmd->bindDescriptorSet(VK_PIPELINE_BIND_POINT_GRAPHICS, mShadowPipeline->getLayout(), mDescriptorSet_Frame->getDescriptorSet(mCurrentFrame), 0);
+		cmd->bindDescriptorSet(VK_PIPELINE_BIND_POINT_GRAPHICS, mShadowPipeline->getLayout(), mSceneMesh->getDescriptorSet_Static()->getDescriptorSet(0), 1);
+		mSceneMesh->draw(cmd);
+
+		cmd->disableDepthBias();
+		cmd->endRendering();
+
 	}
 
 	void Application::transitionGeometryImages(const lzvk::wrapper::CommandBuffer::Ptr& cmd) {
@@ -769,6 +962,23 @@ namespace lzvk::core {
 	void Application::recordGeometryPass(const lzvk::wrapper::CommandBuffer::Ptr& cmd) {
 
 		transitionGeometryImages(cmd);
+
+		cmd->transitionImageLayout(
+			mImage_Shadow->getImage(),
+			mImage_Shadow->getFormat(),
+			VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
+			VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+			VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT,
+			VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT
+		);
+
+		if (!mTexture_Shadow) {
+
+			mTexture_Shadow = lzvk::renderer::Texture::create(mDevice, mImage_Shadow);
+		}
+
+		mShadowUniformManager->update(mDescriptorSet_Shadow, mTexture_Shadow, mCurrentFrame);
+
 		// --- Begin Render Pass ---
 		cmd->beginRendering(mFramebuffer_Geometry);
 
@@ -801,8 +1011,17 @@ namespace lzvk::core {
 		cmd->bindDescriptorSet(VK_PIPELINE_BIND_POINT_GRAPHICS, mSceneGraphPipeline->getLayout(), mSceneMesh->getDescriptorSet_Emissive()->getDescriptorSet(0), 3);
 		cmd->bindDescriptorSet(VK_PIPELINE_BIND_POINT_GRAPHICS, mSceneGraphPipeline->getLayout(), mSceneMesh->getDescriptorSet_Normal()->getDescriptorSet(0), 4);
 		cmd->bindDescriptorSet(VK_PIPELINE_BIND_POINT_GRAPHICS, mSceneGraphPipeline->getLayout(), mSceneMesh->getDescriptorSet_Opacity()->getDescriptorSet(0), 5);
+		cmd->bindDescriptorSet(VK_PIPELINE_BIND_POINT_GRAPHICS, mSceneGraphPipeline->getLayout(), mSceneMesh->getDescriptorSet_Specular()->getDescriptorSet(0), 6);
+		cmd->bindDescriptorSet(VK_PIPELINE_BIND_POINT_GRAPHICS, mSceneGraphPipeline->getLayout(), mDescriptorSet_Shadow->getDescriptorSet(mCurrentFrame), 7);
+		cmd->bindDescriptorSet(VK_PIPELINE_BIND_POINT_GRAPHICS, mSceneGraphPipeline->getLayout(), mDescriptorSet_Skybox->getDescriptorSet(0), 8);
+		
+		// push constants
+		LightPushConstant pc{};
+		pc.lightDir = glm::vec4(mLight.getDirection(), 0.0f);
+		pc.cameraPos = glm::vec4(mCamera.getPosition(), 0.0f);
+		cmd->pushConstants(mSceneGraphPipeline->getLayout(), VK_SHADER_STAGE_FRAGMENT_BIT, pc);
+		
 		mSceneMesh->draw(cmd);
-
 		cmd->endRendering();
 
 	}
@@ -842,9 +1061,9 @@ namespace lzvk::core {
 
 		// 4. Push constants
 		SSAOPushConstants pc{};
-		pc.zNear = 0.01f;
-		pc.zFar = 1000.0f;
-		pc.radius = 0.05f;
+		pc.zNear = 0.1f;
+		pc.zFar = 200.0f;
+		pc.radius = 0.03f;
 		pc.attScale = 0.95f;
 		pc.distScale = 1.7f;
 		cmd->pushConstants(mSSAOPipeline->getLayout(), VK_SHADER_STAGE_COMPUTE_BIT, pc);
@@ -927,12 +1146,12 @@ namespace lzvk::core {
 		mFinalAOImage = inputTex->getImage();
 	}
 
-	void Application::recordCombinePass(const lzvk::wrapper::CommandBuffer::Ptr& cmd) {
+	void Application::recordCombinePass(const lzvk::wrapper::CommandBuffer::Ptr& cmd, uint32_t imageIndex) {
 		
 		// 1. Transition render target
 		cmd->transitionImageLayout(
-			mHDRImage->getImage(),
-			mHDRImage->getFormat(),
+			mSwapChain->getImage(imageIndex),
+			mSwapChain->getFormat(),
 			VK_IMAGE_LAYOUT_UNDEFINED,
 			VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
 			VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
@@ -970,7 +1189,7 @@ namespace lzvk::core {
 
 
 		// 2. Begin render
-		cmd->beginRendering(mFramebuffer_HDR);
+		cmd->beginRendering(mSwapChain, imageIndex);
 
 		// --- Dynamic State ---
 		VkViewport viewport{};
@@ -993,7 +1212,7 @@ namespace lzvk::core {
 
 		// 4. Push constant
 		CombinePushConstant pc{};
-		pc.scale = 3.0f;
+		pc.scale = 1.5f;
 		pc.bias = 0.16f;
 		cmd->pushConstants(mCombinePipeline->getLayout(), VK_SHADER_STAGE_FRAGMENT_BIT, pc);
 
@@ -1006,61 +1225,50 @@ namespace lzvk::core {
 
 	}
 
-	void Application::recordToneMappingPass(const lzvk::wrapper::CommandBuffer::Ptr& cmd, uint32_t imageIndex) {
+	void Application::recordImGuiPass(const lzvk::wrapper::CommandBuffer::Ptr& cmd, uint32_t imageIndex) {
 
-		// 1. Transition render target
-		cmd->transitionImageLayout(
-			mHDRImage->getImage(),
-			mHDRImage->getFormat(),
-			VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-			VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-			VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
-			VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT
-		);
-
-
-		cmd->transitionImageLayout(
-			mSwapChain->getImage(imageIndex),
+		// 2. Begin a new render pass for ImGui
+		cmd->beginRenderingForImGui(
+			mSwapChain->getImageView(imageIndex),
 			mSwapChain->getFormat(),
-			VK_IMAGE_LAYOUT_UNDEFINED,
-			VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-			VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
-			VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT
+			mSwapChain->getExtent()
 		);
 
-
-		if (!mHDRTexture) {
-			mHDRTexture = renderer::Texture::create(mDevice, mHDRImage);
-		}
-
-		mToneMappingUniformManager->update(mDescriptorSet_ToneMapping, mHDRTexture, mCurrentFrame);
-
-		// 2. Begin render
-		cmd->beginRendering(mSwapChain, imageIndex);
-
-		// --- Dynamic State ---
 		VkViewport viewport{};
 		viewport.x = 0.0f;
 		viewport.y = 0.0f;
-		viewport.width = static_cast<float>(mWidth);
-		viewport.height = static_cast<float>(mHeight);
+		viewport.width = static_cast<float>(mSwapChain->getExtent().width);
+		viewport.height = static_cast<float>(mSwapChain->getExtent().height);
 		viewport.minDepth = 0.0f;
 		viewport.maxDepth = 1.0f;
 		cmd->setViewport(0, viewport);
 
 		VkRect2D scissor{};
 		scissor.offset = { 0, 0 };
-		scissor.extent = { mWidth, mHeight };
+		scissor.extent = mSwapChain->getExtent();
 		cmd->setScissor(0, scissor);
 
-		// 3. Bind pipeline + descriptor sets
-		cmd->bindGraphicPipeline(mToneMappingPipeline->getPipeline());
-		cmd->bindDescriptorSet(VK_PIPELINE_BIND_POINT_GRAPHICS, mToneMappingPipeline->getLayout(), mDescriptorSet_ToneMapping->getDescriptorSet(mCurrentFrame), 0);
+		ImGui_ImplVulkan_NewFrame();
+		ImGui_ImplGlfw_NewFrame();
+		ImGui::NewFrame();
 
-		// 4. Draw fullscreen triangle
-		cmd->draw(3);
+		ImGui::Begin("Light Control");
+		//ImGui::SliderFloat("Theta", &mLightTheta, 0.0f, 360.0f);
+		//ImGui::SliderFloat("Phi", &mLightPhi, -89.9f, 89.9f);
+		ImGui::End();
 
-		// 5. End render
+		mLightTheta += 0.05f;
+		if (mLightTheta > 360.0f)
+			mLightTheta -= 360.0f;
+
+		mLight.setDirectionFromSpherical(mLightTheta, mLightPhi);
+
+		ImGui::Render();
+
+		// 3. Issue ImGui draw calls
+		ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), cmd->getCommandBuffer());
+
+		// 4. End render pass
 		cmd->endRendering();
 
 	}
@@ -1069,15 +1277,17 @@ namespace lzvk::core {
 
 		mCommandBuffers[mCurrentFrame]->begin();
 
+		recordShadowPass(mCommandBuffers[mCurrentFrame]);
+
 		recordGeometryPass(mCommandBuffers[mCurrentFrame]);
 
 		recordSSAOPass(mCommandBuffers[mCurrentFrame]);
 
 		recordBlurPass(mCommandBuffers[mCurrentFrame]);
 
-		recordCombinePass(mCommandBuffers[mCurrentFrame]);
+		recordCombinePass(mCommandBuffers[mCurrentFrame], imageIndex);
 
-		recordToneMappingPass(mCommandBuffers[mCurrentFrame], imageIndex);
+		recordImGuiPass(mCommandBuffers[mCurrentFrame], imageIndex);
 
 		mCommandBuffers[mCurrentFrame]->transitionImageLayout(
 			mSwapChain->getImage(imageIndex),
@@ -1241,29 +1451,82 @@ namespace lzvk::core {
 		// Swap chain
 		mSwapChain.reset();
 
-		// Descriptor Sets
-		mDescriptorSet_Frame.reset();
-		mDescriptorPool_Frame.reset();
-		mDescriptorSetLayout_Frame.reset();
+		// === Combine ===
+		mCombinePipeline.reset();
+		mAOTexture_Combine.reset();
+		mColorTexture_Combine.reset();
+		mDescriptorSet_Combine.reset();
+		mDescriptorPool_Combine.reset();
+		mDescriptorSetLayout_Combine.reset();
+		mCombineUniformManager.reset();
 
+		// === Blur ===
+		mBlurPipelineH.reset();
+		mBlurPipelineV.reset();
+		mAOImage_BlurPing.reset();
+		mAOImage_BlurPong.reset();
+		mFinalAOImage.reset();
+		mAOTexture_SSAO.reset();
+		mAOTexture_BlurPing.reset();
+		mAOTexture_BlurPong.reset();
+		mDepthTexture_Blur.reset();
+
+		for (auto& set : mDescriptorSet_BlurH) set.reset();
+		for (auto& set : mDescriptorSet_BlurV) set.reset();
+		mDescriptorPool_Blur.reset();
+		mDescriptorSetLayout_Blur.reset();
+		mBlurUniformManager.reset();
+
+		// === SSAO ===
+		mSSAOPipeline.reset();
+		mAOImage_SSAO.reset();
+		mRotationTexture.reset();
+		mDepthTexture_SSAO.reset();
+		mDescriptorSet_SSAO.reset();
+		mDescriptorPool_SSAO.reset();
+		mDescriptorSetLayout_SSAO.reset();
+		mSSAOUniformManager.reset();
+
+		// === Geometry ===
+		mFramebuffer_Geometry.reset();
+		mColorImage_Geometry.reset();
+		mDepthImage_Geometry.reset();
+
+		// === Scene ===
+		mSceneMesh.reset();
+		mSceneGraphPipeline.reset();
+		mShadowUniformManager.reset();
+
+		// === Skybox ===
+		mSkyboxPipeline.reset();
 		mDescriptorSet_Skybox.reset();
 		mDescriptorPool_Skybox.reset();
 		mDescriptorSetLayout_Skybox.reset();
-
-		// Uniform Managers
-		mFrameUniformManager.reset();
 		mSkyboxUniformManager.reset();
-	
-		mSkyboxPipeline.reset();
-		mSceneGraphPipeline.reset();
 
+		// === Shadow ===
+		mShadowPipeline.reset();
+		mTexture_Shadow.reset();
+		mDescriptorSet_Shadow.reset();
+		mDescriptorPool_Shadow.reset();
+		mDescriptorSetLayout_Shadow.reset();
+		mImage_Shadow.reset();
+		mFramebuffer_Shadow.reset();
 
+		// === Frame ===
+		mDescriptorSet_Frame.reset();
+		mDescriptorPool_Frame.reset();
+		mDescriptorSetLayout_Frame.reset();
+		mFrameUniformManager.reset();
+
+		// === Command / Sync ===
+		mCommandBuffers.clear();
 		mImageAvailableSemaphores.clear();
 		mRenderFinishedSemaphores.clear();
 		mInFlightFences.clear();
 
-		mSceneMesh.reset();
-	
+		cleanUpImGui();
+		// === Core Vulkan handles ===
 		mCommandPool.reset();
 		mDevice.reset();
 		mSurface.reset();

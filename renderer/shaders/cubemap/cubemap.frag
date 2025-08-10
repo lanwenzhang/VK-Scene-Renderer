@@ -6,8 +6,8 @@ layout(location = 0) out vec4 outColor;
 layout(set = 1, binding = 3) uniform samplerCube uCubemap;
 
 void main() {
-
-    outColor = texture(uCubemap, normalize(vDirection));
+    
+     outColor = texture(uCubemap, normalize(vDirection));
 //    outColor = vec4(1.0, 0.0, 1.0, 1.0);
 
 }

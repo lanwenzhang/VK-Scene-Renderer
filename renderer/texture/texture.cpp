@@ -5,7 +5,7 @@
 
 namespace lzvk::renderer {
 
-	Texture::Texture(const lzvk::wrapper::Device::Ptr& device, const lzvk::wrapper::CommandPool::Ptr& commandPool, const std::string& imageFilePath) {
+	Texture::Texture(const lzvk::wrapper::Device::Ptr& device, const lzvk::wrapper::CommandPool::Ptr& commandPool, const std::string& imageFilePath, VkFormat format) {
 		
 		mDevice = device;
 
@@ -21,7 +21,7 @@ namespace lzvk::renderer {
 
 		mImage = lzvk::wrapper::Image::create(
 			mDevice, texWidth, texHeight,
-			VK_FORMAT_R8G8B8A8_SRGB,
+			format,
 			VK_IMAGE_TYPE_2D,
 			VK_IMAGE_TILING_OPTIMAL,
 			VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,

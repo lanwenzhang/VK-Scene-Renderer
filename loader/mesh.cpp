@@ -30,6 +30,7 @@ namespace lzvk::loader {
         meshData.emissiveTextureFiles.push_back(dummyPath);
         meshData.normalTextureFiles.push_back(dummyPath);
         meshData.opacityTextureFiles.push_back(dummyPath);
+        meshData.specularTextureFiles.push_back(dummyPath);
 
         std::unordered_map<std::string, int> diffuseTextureMap;
         diffuseTextureMap[dummyPath] = 0;
@@ -42,6 +43,9 @@ namespace lzvk::loader {
 
         std::unordered_map<std::string, int> opacityTextureMap;
         opacityTextureMap[dummyPath] = 0;
+
+        std::unordered_map<std::string, int> specularTextureMap;
+        specularTextureMap[dummyPath] = 0;
 
         Assimp::Importer importer;
 
@@ -139,6 +143,34 @@ namespace lzvk::loader {
 
                 std::cout << "[Material " << i << "] Diffuse texture: dummy.png" << std::endl;
             }
+
+            // ---------- specular texture ----------
+            if (AI_SUCCESS == aiMat->GetTexture(aiTextureType_SPECULAR, 0, &str)) {
+                std::string rawPath = str.C_Str();
+
+                std::filesystem::path texPath(rawPath);
+                std::filesystem::path objPath(path);
+                std::filesystem::path baseDir = objPath.parent_path();
+                std::filesystem::path fullPath = baseDir / texPath;
+                fullPath = fullPath.lexically_normal();
+                std::string uri = fullPath.string();
+
+                m.specularTexture = addTextureIfUnique(
+                    meshData.specularTextureFiles,
+                    specularTextureMap,
+                    uri
+                );
+                m.specularTexturePath = uri;
+
+                std::cout << "[Material " << i << "] Specular texture: " << uri << std::endl;
+            }
+            else {
+                m.specularTexture = 0;
+                m.specularTexturePath = "dummy.png";
+
+                std::cout << "[Material " << i << "] Specular texture: dummy.png" << std::endl;
+            }
+
 
             // ---------- emissive texture ----------
             if (AI_SUCCESS == aiMat->GetTexture(aiTextureType_EMISSIVE, 0, &str)) {
@@ -494,7 +526,7 @@ namespace lzvk::loader {
         saveStringList(meshData.emissiveTextureFiles);
         saveStringList(meshData.normalTextureFiles);
         saveStringList(meshData.opacityTextureFiles);
-        saveStringList(meshData.occlusionTextureFiles);
+        saveStringList(meshData.specularTextureFiles);
 
         fclose(f);
         printf("MeshData saved to %s\n", path.c_str());
@@ -569,7 +601,7 @@ namespace lzvk::loader {
         loadStringList(meshData.emissiveTextureFiles);
         loadStringList(meshData.normalTextureFiles);
         loadStringList(meshData.opacityTextureFiles);
-        loadStringList(meshData.occlusionTextureFiles);
+        loadStringList(meshData.specularTextureFiles);
 
         fclose(f);
         printf("MeshData loaded from %s\n", path.c_str());

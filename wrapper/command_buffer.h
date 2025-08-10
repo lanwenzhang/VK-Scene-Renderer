@@ -23,11 +23,15 @@ namespace lzvk::wrapper {
 		// Command instructions
 		void begin(VkCommandBufferUsageFlags flag = 0, const VkCommandBufferInheritanceInfo& inheritance = {});
 		void beginRendering(const Framebuffer::Ptr& framebuffer);
+		void beginRendering(const Framebuffer::Ptr& framebuffer, uint32_t layer);
 		void beginRendering(const SwapChain::Ptr& swapchain, uint32_t imageIndex);
+		void beginRenderingForImGui(VkImageView colorImageView, VkFormat colorFormat, VkExtent2D extent);
 		void beginRenderPass(const VkRenderPassBeginInfo& renderPassBeginInfo, const VkSubpassContents &subPassContents = VK_SUBPASS_CONTENTS_INLINE);
 
 		void setViewport(uint32_t firstViewport, const VkViewport& viewport);
 		void setScissor(uint32_t firstScissor, const VkRect2D& scissor);
+		void setDepthBias(float constant, float clamp, float slope);
+		void disableDepthBias();
 
 		void bindGraphicPipeline(const VkPipeline& pipeline);
 		void bindComputePipeline(const VkPipeline& pipeline);
@@ -39,6 +43,8 @@ namespace lzvk::wrapper {
 		void pushConstants(const VkPipelineLayout layout, VkShaderStageFlags stageFlags, const lzvk::core::SSAOPushConstants& pc);
 		void pushConstants(const VkPipelineLayout layout, VkShaderStageFlags stageFlags, const lzvk::core::BlurPushConstant& pc);
 		void pushConstants(const VkPipelineLayout layout, VkShaderStageFlags stageFlags, const lzvk::core::CombinePushConstant& pc);
+		void pushConstants(const VkPipelineLayout layout, VkShaderStageFlags stageFlags, const lzvk::core::LightPushConstant& pc);
+		void pushConstants(const VkPipelineLayout layout, VkShaderStageFlags stageFlags, const lzvk::core::IrradiancePushConstant& pc);
 
 		void dispatch(uint32_t x, uint32_t y, uint32_t z);
 
@@ -70,17 +76,6 @@ namespace lzvk::wrapper {
 		);
 
 		VkImageAspectFlags getAspectMaskForFormat(VkFormat format);
-
-		void blitImage(
-			VkImage srcImage,
-			VkImageLayout srcLayout,
-			VkImage dstImage,
-			VkImageLayout dstLayout,
-			VkImageAspectFlags aspectMask,
-			uint32_t width,
-			uint32_t height
-		);
-
 
 		[[nodiscard]] auto getCommandBuffer()const { return mCommandBuffer; }
 

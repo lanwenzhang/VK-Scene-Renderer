@@ -33,15 +33,17 @@
 #include "../renderer/uniform/transform_uniform_manager.h"
 #include "../renderer/uniform/material_uniform_manager.h"
 #include "../renderer/uniform/skybox_uniform_manager.h"
+#include "../renderer/uniform/shadow_uniform_manager.h"
 #include "../renderer/uniform/scene_texture_manager.h"
 #include "../renderer/uniform/draw_data_uniform_manager.h"
 #include "../renderer/uniform/ssao_uniform_manager.h"
 #include "../renderer/uniform/blur_uniform_manager.h"
 #include "../renderer/uniform/combine_uniform_manager.h"
-#include "../renderer/uniform/tone_mapping_uniform_manager.h"
+
 #include "../renderer/texture/texture.h"
 #include "../renderer/texture/cube_map_texture.h"
 #include "../renderer/camera/camera.h"
+#include "../renderer/light/directional_light.h"
 
 namespace lzvk::core{
 
@@ -70,11 +72,11 @@ namespace lzvk::core{
 	private:
 
 		// framebuffer
+		void createEnvironmentMap();
+		void createShadowMap();
 		void createGeometryFramebuffer();
 		void createSSAOResources();
 		void createBlurImages();
-		void createHDRImages();
-
 
 		// scene buffer
 		void createSceneBuffers();
@@ -82,23 +84,29 @@ namespace lzvk::core{
 		// descriptor
 		void createDescriptorSets();
 
+		// imgui
+		void createImGuiDescriptorPool();
+		void initImGui();
+		void cleanUpImGui();
+
 		// pipelines
 		void applyCommonPipelineState(const lzvk::wrapper::Pipeline::Ptr& pipeline, bool enableDepthWrite, VkCullModeFlagBits cullMode, PipelineType type);
+		void createShadowPipeline();
 		void createSkyboxPipeline();
 		void createSceneGraphPipeline();
 		void createSSAOPipeline();
 		void createBlurPipelines();
 		void createCombinePipeline();
-		void createToneMappingPipeline();
 
 		// command buffers
 		void createCommandBuffers();
+		void recordShadowPass(const lzvk::wrapper::CommandBuffer::Ptr& cmd);
 		void transitionGeometryImages(const lzvk::wrapper::CommandBuffer::Ptr& cmd);
 		void recordGeometryPass(const lzvk::wrapper::CommandBuffer::Ptr& cmd);
 		void recordSSAOPass(const lzvk::wrapper::CommandBuffer::Ptr& cmd);
 		void recordBlurPass(const lzvk::wrapper::CommandBuffer::Ptr& cmd);
-		void recordCombinePass(const lzvk::wrapper::CommandBuffer::Ptr& cmd);
-		void recordToneMappingPass(const lzvk::wrapper::CommandBuffer::Ptr& cmd, uint32_t imageIndex);
+		void recordCombinePass(const lzvk::wrapper::CommandBuffer::Ptr& cmd, uint32_t imageIndex);
+		void recordImGuiPass(const lzvk::wrapper::CommandBuffer::Ptr& cmd, uint32_t imageIndex);
 		void recordCommandBuffer(uint32_t imageIndex);
 
 		// sync
@@ -106,13 +114,15 @@ namespace lzvk::core{
 
 	private:
 
-		unsigned int mWidth{ 1920 };
-		unsigned int mHeight{ 1080 };
+		unsigned int mWidth{ 600 };
+		unsigned int mHeight{ 400 };
+
+		unsigned int mShadowMapRes{ 4096 };
+		unsigned int mIrradianceMapRes{ 128 };
 
 		int mCurrentFrame{ 0 };
 		const int MAX_FRAMES_IN_FLIGHT{ 2 };
 		int mBlurPassCount{ 2 };
-
 
 		lzvk::core::Window::Ptr mWindow{ nullptr };
 		lzvk::wrapper::Instance::Ptr mInstance{ nullptr };
@@ -120,6 +130,18 @@ namespace lzvk::core{
 		lzvk::wrapper::Surface::Ptr mSurface{ nullptr };
 		lzvk::wrapper::CommandPool::Ptr mCommandPool{ nullptr };
 		lzvk::wrapper::SwapChain::Ptr mSwapChain{ nullptr };
+
+		// pre compute
+		lzvk::renderer::CubeMapTexture::Ptr mSkyboxCube{ nullptr };
+		lzvk::wrapper::Image::Ptr mImage_IrradianceCube{ nullptr };
+		lzvk::renderer::CubeMapTexture::Ptr mIrradianceCube{ nullptr };
+
+		// pass 00 shadow
+		lzvk::wrapper::Framebuffer::Ptr mFramebuffer_Shadow{ nullptr };
+		lzvk::wrapper::Image::Ptr mImage_Shadow{ nullptr };
+		lzvk::renderer::Texture::Ptr mTexture_Shadow{ nullptr };
+		lzvk::wrapper::Pipeline::Ptr mShadowPipeline{ nullptr };
+
 
 		// pass 01 geometry
 		lzvk::wrapper::Framebuffer::Ptr mFramebuffer_Geometry{ nullptr };
@@ -131,11 +153,11 @@ namespace lzvk::core{
 
 		lzvk::renderer::SceneMeshRenderer::Ptr mSceneMesh{ nullptr };
 		lzvk::renderer::FrameUniformManager::Ptr mFrameUniformManager{ nullptr };
+		lzvk::renderer::ShadowUniformManager::Ptr mShadowUniformManager{ nullptr };
 		lzvk::renderer::SkyboxUniformManager::Ptr mSkyboxUniformManager{ nullptr };
 		lzvk::renderer::SSAOUniformManager::Ptr mSSAOUniformManager{ nullptr };
 		lzvk::renderer::BlurUniformManager::Ptr mBlurUniformManager{ nullptr };
 		lzvk::renderer::CombineUniformManager::Ptr mCombineUniformManager{ nullptr };
-		lzvk::renderer::ToneMappingUniformManager::Ptr mToneMappingUniformManager{ nullptr };
 
 		// pass 02 ssao
 		lzvk::renderer::Texture::Ptr mDepthTexture_SSAO{ nullptr };
@@ -159,18 +181,17 @@ namespace lzvk::core{
 		// pass 04 combine
 		lzvk::renderer::Texture::Ptr mColorTexture_Combine{ nullptr };
 		lzvk::renderer::Texture::Ptr mAOTexture_Combine{ nullptr };
-		lzvk::wrapper::Image::Ptr mHDRImage{ nullptr };
-		lzvk::wrapper::Framebuffer::Ptr mFramebuffer_HDR{ nullptr };
 		lzvk::wrapper::Pipeline::Ptr mCombinePipeline{ nullptr };
-
-		// pass 05 hdr tone mapping
-		lzvk::renderer::Texture::Ptr mHDRTexture { nullptr };
-		lzvk::wrapper::Pipeline::Ptr mToneMappingPipeline{ nullptr };
 
 		// vp matrix uniform
 		lzvk::wrapper::DescriptorSetLayout::Ptr mDescriptorSetLayout_Frame{ nullptr };
 		lzvk::wrapper::DescriptorPool::Ptr      mDescriptorPool_Frame{ nullptr };
 		lzvk::wrapper::DescriptorSet::Ptr       mDescriptorSet_Frame{ nullptr };
+
+		// shadow uniform
+		lzvk::wrapper::DescriptorSetLayout::Ptr mDescriptorSetLayout_Shadow{ nullptr };
+		lzvk::wrapper::DescriptorPool::Ptr      mDescriptorPool_Shadow{ nullptr };
+		lzvk::wrapper::DescriptorSet::Ptr       mDescriptorSet_Shadow{ nullptr };
 
 		// sky box uniform
 		lzvk::wrapper::DescriptorSetLayout::Ptr mDescriptorSetLayout_Skybox{ nullptr };
@@ -193,11 +214,8 @@ namespace lzvk::core{
 		lzvk::wrapper::DescriptorPool::Ptr      mDescriptorPool_Combine{ nullptr };
 		lzvk::wrapper::DescriptorSet::Ptr       mDescriptorSet_Combine{ nullptr };
 
-		// tone mapping uniform
-		lzvk::wrapper::DescriptorSetLayout::Ptr mDescriptorSetLayout_ToneMapping{ nullptr };
-		lzvk::wrapper::DescriptorPool::Ptr      mDescriptorPool_ToneMapping{ nullptr };
-		lzvk::wrapper::DescriptorSet::Ptr       mDescriptorSet_ToneMapping{ nullptr };
-
+		// imgui
+		VkDescriptorPool mImGuiDescriptorPool = VK_NULL_HANDLE;
 
 		// scene
 		lzvk::loader::Scene    mSceneExterior;
@@ -211,6 +229,12 @@ namespace lzvk::core{
 
 		lzvk::renderer::Camera mCamera;
 		VPMatrices mVPMatrices;
+
+		lzvk::renderer::DirectionalLight mLight;
+		VPMatrices mLightVP;
+		float mLightTheta{ 90.0f };
+		float mLightPhi{ -26.0f };
+
 
 		std::vector<lzvk::wrapper::CommandBuffer::Ptr> mCommandBuffers{};
 		std::vector<lzvk::wrapper::Semaphore::Ptr> mImageAvailableSemaphores{};

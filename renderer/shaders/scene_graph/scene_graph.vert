@@ -10,7 +10,8 @@ layout(location = 1) out vec2 fragUV;
 layout(location = 2) out vec3 fragNormal;
 layout(location = 3) out mat3 tbn;
 layout(location = 6) out flat uint matID;
-
+layout(location = 7) out vec4 lightSpaceClipCoord;
+layout(location = 8) out vec4 worldPos;
 
 struct DrawData {
     uint transformId;
@@ -23,6 +24,12 @@ layout(set = 0, binding = 0) uniform VPMatrices {
     mat4 mProjectionMatrix;
 } vpUBO;
 
+layout(set = 0, binding = 1) uniform LightVPMatrices {
+    mat4 mViewMatrix;
+    mat4 mProjectionMatrix;
+} lightvp;
+
+
 layout(set = 1, binding = 1) readonly buffer Transforms { mat4 worldMatrices[];};
 layout(set = 1, binding = 4) readonly buffer DrawDataBuffer { DrawData dd[]; };
 
@@ -30,7 +37,7 @@ void main() {
 
     uint transformIndex = dd[gl_BaseInstance].transformId;
     mat4 model = worldMatrices[transformIndex];
-    vec4 worldPos = model * vec4(inPosition, 1.0);
+    worldPos = model * vec4(inPosition, 1.0);
     
     fragPos = worldPos.xyz;
     fragUV = inUV;
@@ -44,6 +51,6 @@ void main() {
 
     gl_Position = vpUBO.mProjectionMatrix * vpUBO.mViewMatrix * worldPos;
 
-
+    lightSpaceClipCoord = lightvp.mProjectionMatrix * lightvp.mViewMatrix * worldPos;
 }
 

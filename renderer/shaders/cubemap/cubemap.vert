@@ -29,20 +29,19 @@ const int indices[36] = int[](
 );
 
 
-mat3 rotateX90() {
-    return mat3(
-        1.0,  0.0,  0.0,
-        0.0,  0.0,  1.0,
-        0.0, -1.0,  0.0
-    );
-}
+mat3 rotY180 = mat3(
+    -1.0, 0.0,  0.0,
+     0.0, 1.0,  0.0,
+     0.0, 0.0, -1.0
+);
+
 
 void main() {
 
     int idx = indices[gl_VertexIndex];
     vec3 pos = positions[idx];
 
-    vDirection = rotateX90() * pos;
+    vDirection = rotY180 * pos;
 
     mat4 viewRotOnly = mat4(mat3(vpUBO.mViewMatrix));
     vec4 clip = vpUBO.mProjectionMatrix * viewRotOnly * vec4(pos, 1.0);

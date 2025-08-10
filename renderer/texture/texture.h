@@ -20,7 +20,7 @@ namespace lzvk::renderer {
 			return std::make_shared<Texture>(device, image);
 		}
 
-		Texture(const lzvk::wrapper::Device::Ptr& device, const lzvk::wrapper::CommandPool::Ptr& commandPool, const std::string& imageFilePath);
+		Texture(const lzvk::wrapper::Device::Ptr& device, const lzvk::wrapper::CommandPool::Ptr& commandPool, const std::string& imageFilePath, VkFormat format = VK_FORMAT_R8G8B8A8_SRGB);
 		Texture(const lzvk::wrapper::Device::Ptr& device, const lzvk::wrapper::Image::Ptr& image);
 
 		~Texture();	

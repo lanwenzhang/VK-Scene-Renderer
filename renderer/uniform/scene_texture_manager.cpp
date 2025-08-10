@@ -61,8 +61,8 @@ namespace lzvk::renderer{
             auto tex = std::make_shared<Texture>(
                 mDevice,
                 mCommandPool,
-                texPath
-            );
+                texPath,
+                VK_FORMAT_R8G8B8A8_UNORM);
             normalTextures.push_back(tex);
         }
 
@@ -90,6 +90,23 @@ namespace lzvk::renderer{
             static_cast<uint32_t>(opacityTextures.size())
         );
 
+        // load specular textures
+        std::vector<Texture::Ptr> specularTextures;
+        for (const auto& texPath : meshData.specularTextureFiles) {
+
+            auto tex = std::make_shared<Texture>(
+                mDevice,
+                mCommandPool,
+                texPath
+            );
+            specularTextures.push_back(tex);
+        }
+
+        mSceneSpecularTexturesParam = loadTextureParam(
+            specularTextures,
+            0,
+            static_cast<uint32_t>(specularTextures.size())
+        );
     }
 
     lzvk::wrapper::UniformParameter::Ptr SceneTextureManager::loadTextureParam(

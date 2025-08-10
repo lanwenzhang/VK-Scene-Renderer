@@ -50,7 +50,7 @@ namespace lzvk::loader {
         std::vector<std::string> emissiveTextureFiles;
         std::vector<std::string> normalTextureFiles;
         std::vector<std::string> opacityTextureFiles;
-        std::vector<std::string> occlusionTextureFiles;
+        std::vector<std::string> specularTextureFiles;
     };
 
     bool loadMeshFile(const std::string& path, MeshData& meshData, Scene& scene);

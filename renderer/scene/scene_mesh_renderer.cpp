@@ -178,6 +178,26 @@ namespace lzvk::renderer {
             1
         );
 
+        //
+        // ========== SPECULAR TEXTURE SET ==========
+        //
+
+        auto specularParams = mSceneTextureManager->getSpecularParams();
+
+        mDescriptorSetLayout_Specular = lzvk::wrapper::DescriptorSetLayout::create(mDevice);
+        mDescriptorSetLayout_Specular->build(specularParams);
+
+        mDescriptorPool_Specular = lzvk::wrapper::DescriptorPool::create(mDevice);
+        mDescriptorPool_Specular->build(specularParams, 1);
+
+        mDescriptorSet_Specular = lzvk::wrapper::DescriptorSet::create(
+            mDevice,
+            specularParams,
+            mDescriptorSetLayout_Specular,
+            mDescriptorPool_Specular,
+            1
+        );
+
 
 
         //

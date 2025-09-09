@@ -24,8 +24,11 @@ cmake -G "Visual Studio 17 2022" -A x64 ..
 ```
 
 ## Dependencies
-* [stb](https://github.com/nothings/stb)
 * [assimp](https://github.com/assimp/assimp)
+* [glm](https://github.com/g-truc/glm)
+* [glfw](https://www.glfw.org/)
+* [ktx](https://github.com/KhronosGroup/KTX-Software)
+* [stb](https://github.com/nothings/stb)
 * [Vulkan SDK 1.4](https://vulkan.lunarg.com/)
 
 ## Reference
